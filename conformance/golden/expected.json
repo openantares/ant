@@ -1,0 +1,46 @@
+{
+  "basic.ant": {
+    "counts": {
+      "beliefs": 1,
+      "edges": 1,
+      "evidence": 1,
+      "observations": 1,
+      "schemaTypes": 0,
+      "vectors": 1,
+      "vertices": 2
+    },
+    "firstVertexId": "deal_1",
+    "projectId": 1,
+    "recordKinds": [
+      "vertex",
+      "vertex",
+      "edge",
+      "observation",
+      "evidence",
+      "belief",
+      "vector"
+    ],
+    "tenantId": 1,
+    "version": "0.1"
+  },
+  "forward_compat.ant": {
+    "counts": {
+      "beliefs": 0,
+      "edges": 0,
+      "evidence": 0,
+      "observations": 0,
+      "schemaTypes": 0,
+      "vectors": 0,
+      "vertices": 1
+    },
+    "projectId": 1,
+    "recordKinds": [
+      "vertex"
+    ],
+    "skippedKinds": [
+      "hologram"
+    ],
+    "tenantId": 1,
+    "version": "0.1"
+  }
+}

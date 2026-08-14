@@ -4,57 +4,133 @@
   "title": "OpenAntares .ant record (format 0.1)",
   "description": "Schema for ONE decompressed NDJSON line of a .ant stream. The container-level rules (manifest first, trailer last, sha256 over preceding lines) live in SPEC.md and cannot be expressed per-line.",
   "type": "object",
-  "required": ["kind"],
+  "required": [
+    "kind"
+  ],
   "oneOf": [
-    { "$ref": "#/$defs/manifest" },
-    { "$ref": "#/$defs/schema_type" },
-    { "$ref": "#/$defs/vertex" },
-    { "$ref": "#/$defs/edge" },
-    { "$ref": "#/$defs/observation" },
-    { "$ref": "#/$defs/evidence" },
-    { "$ref": "#/$defs/belief" },
-    { "$ref": "#/$defs/vector" },
-    { "$ref": "#/$defs/trailer" },
-    { "$ref": "#/$defs/unknown_kind" }
+    {
+      "$ref": "#/$defs/manifest"
+    },
+    {
+      "$ref": "#/$defs/schema_type"
+    },
+    {
+      "$ref": "#/$defs/vertex"
+    },
+    {
+      "$ref": "#/$defs/edge"
+    },
+    {
+      "$ref": "#/$defs/observation"
+    },
+    {
+      "$ref": "#/$defs/evidence"
+    },
+    {
+      "$ref": "#/$defs/belief"
+    },
+    {
+      "$ref": "#/$defs/vector"
+    },
+    {
+      "$ref": "#/$defs/trailer"
+    },
+    {
+      "$ref": "#/$defs/vertex_tombstone"
+    },
+    {
+      "$ref": "#/$defs/edge_tombstone"
+    },
+    {
+      "$ref": "#/$defs/unknown_kind"
+    }
   ],
   "$defs": {
     "manifest": {
       "type": "object",
-      "required": ["kind", "format", "version", "tenantId", "projectId"],
+      "required": [
+        "kind",
+        "format",
+        "version",
+        "tenantId",
+        "projectId"
+      ],
       "properties": {
-        "kind": { "const": "manifest" },
-        "format": { "const": "antares" },
-        "version": { "type": "string" },
-        "tenantId": { "type": "integer", "minimum": 0 },
-        "projectId": { "type": "integer", "minimum": 0 },
+        "kind": {
+          "const": "manifest"
+        },
+        "format": {
+          "const": "antares"
+        },
+        "version": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "projectId": {
+          "type": "integer",
+          "minimum": 0
+        },
         "selection": {},
-        "createdAt": { "type": "string" },
-        "producer": { "type": "string" }
+        "createdAt": {
+          "type": "string"
+        },
+        "producer": {
+          "type": "string"
+        }
       },
       "additionalProperties": true
     },
     "schema_type": {
       "type": "object",
-      "required": ["kind", "data"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "kind": { "const": "schema_type" },
-        "data": { "type": "object" }
+        "kind": {
+          "const": "schema_type"
+        },
+        "data": {
+          "type": "object"
+        }
       },
       "additionalProperties": true
     },
     "vertex": {
       "type": "object",
-      "required": ["kind", "data"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "kind": { "const": "vertex" },
+        "kind": {
+          "const": "vertex"
+        },
         "data": {
           "type": "object",
-          "required": ["id", "label"],
+          "required": [
+            "id",
+            "label"
+          ],
           "properties": {
-            "id": { "type": "string" },
-            "name": { "type": "string" },
-            "label": { "type": "string" },
-            "properties": { "type": "object" }
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/propertyValue"
+              }
+            }
           },
           "additionalProperties": true
         }
@@ -63,22 +139,59 @@
     },
     "edge": {
       "type": "object",
-      "required": ["kind", "data"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "kind": { "const": "edge" },
+        "kind": {
+          "const": "edge"
+        },
         "data": {
           "type": "object",
-          "required": ["id", "src", "dst", "label"],
+          "required": [
+            "id",
+            "src",
+            "dst",
+            "label"
+          ],
           "properties": {
-            "id": { "type": "string" },
-            "src": { "type": "string" },
-            "src_type": { "type": "string" },
-            "dst": { "type": "string" },
-            "dst_type": { "type": "string" },
-            "label": { "type": "string" },
-            "properties": { "type": "object" },
-            "confidence": { "type": ["number", "null"] },
-            "evidenced_by": { "type": "array", "items": { "type": "string" } }
+            "id": {
+              "type": "string"
+            },
+            "src": {
+              "type": "string"
+            },
+            "src_type": {
+              "type": "string"
+            },
+            "dst": {
+              "type": "string"
+            },
+            "dst_type": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/propertyValue"
+              }
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "evidenced_by": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           },
           "additionalProperties": true
         }
@@ -87,25 +200,71 @@
     },
     "observation": {
       "type": "object",
-      "required": ["kind", "data"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "kind": { "const": "observation" },
+        "kind": {
+          "const": "observation"
+        },
         "data": {
           "type": "object",
-          "required": ["id", "predicate", "observed_at"],
+          "required": [
+            "id",
+            "predicate",
+            "observed_at"
+          ],
           "properties": {
-            "id": { "type": "string" },
-            "tenant_id": { "type": "integer" },
-            "project_id": { "type": "integer" },
-            "subject_id": { "type": ["string", "null"] },
-            "predicate": { "type": "string" },
-            "object_id": { "type": ["string", "null"] },
+            "id": {
+              "type": "string"
+            },
+            "tenant_id": {
+              "type": "integer"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "subject_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "predicate": {
+              "type": "string"
+            },
+            "object_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "object_value": {},
-            "observed_at": { "type": "string" },
-            "extracted_at": { "type": "string" },
-            "confidence": { "type": ["number", "null"] },
-            "evidence_ids": { "type": "array", "items": { "type": "string" } },
-            "extractor_version": { "type": ["string", "null"] }
+            "observed_at": {
+              "type": "string"
+            },
+            "extracted_at": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "extractor_version": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           },
           "additionalProperties": true
         }
@@ -114,20 +273,44 @@
     },
     "evidence": {
       "type": "object",
-      "required": ["kind", "data"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "kind": { "const": "evidence" },
+        "kind": {
+          "const": "evidence"
+        },
         "data": {
           "type": "object",
-          "required": ["id", "source_type", "source_id", "content"],
+          "required": [
+            "id",
+            "source_type",
+            "source_id",
+            "content"
+          ],
           "properties": {
-            "id": { "type": "string" },
-            "tenant_id": { "type": "integer" },
-            "project_id": { "type": "integer" },
-            "source_uri": { "type": "string" },
-            "source_type": { "type": "string" },
-            "source_id": { "type": "string" },
-            "content": { "type": "string" }
+            "id": {
+              "type": "string"
+            },
+            "tenant_id": {
+              "type": "integer"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "source_uri": {
+              "type": "string"
+            },
+            "source_type": {
+              "type": "string"
+            },
+            "source_id": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            }
           },
           "additionalProperties": true
         }
@@ -136,22 +319,53 @@
     },
     "belief": {
       "type": "object",
-      "required": ["kind", "data"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "kind": { "const": "belief" },
+        "kind": {
+          "const": "belief"
+        },
         "data": {
           "type": "object",
-          "required": ["id", "subject_id", "predicate"],
+          "required": [
+            "id",
+            "subject_id",
+            "predicate"
+          ],
           "properties": {
-            "id": { "type": "string" },
-            "tenant_id": { "type": "integer" },
-            "project_id": { "type": "integer" },
-            "subject_id": { "type": "string" },
-            "predicate": { "type": "string" },
+            "id": {
+              "type": "string"
+            },
+            "tenant_id": {
+              "type": "integer"
+            },
+            "project_id": {
+              "type": "integer"
+            },
+            "subject_id": {
+              "type": "string"
+            },
+            "predicate": {
+              "type": "string"
+            },
             "value_json": {},
-            "belief_version": { "type": "integer" },
-            "derived_from": { "type": "array", "items": { "type": "string" } },
-            "evidence_ids": { "type": "array", "items": { "type": "string" } }
+            "belief_version": {
+              "type": "integer"
+            },
+            "derived_from": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           },
           "additionalProperties": true
         }
@@ -160,20 +374,54 @@
     },
     "vector": {
       "type": "object",
-      "required": ["kind", "data"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "kind": { "const": "vector" },
+        "kind": {
+          "const": "vector"
+        },
         "data": {
           "type": "object",
-          "required": ["recordType", "recordId", "label", "field", "vector"],
+          "required": [
+            "recordType",
+            "recordId",
+            "label",
+            "field",
+            "vector"
+          ],
           "properties": {
-            "recordType": { "type": "string" },
-            "recordId": { "type": "string" },
-            "label": { "type": "string" },
-            "field": { "type": "string" },
-            "vector": { "type": "array", "items": { "type": "number" } },
-            "textPreview": { "type": ["string", "null"] },
-            "evidenceIds": { "type": "array", "items": { "type": "string" } }
+            "recordType": {
+              "type": "string"
+            },
+            "recordId": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "field": {
+              "type": "string"
+            },
+            "vector": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "textPreview": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "evidenceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           },
           "additionalProperties": true
         }
@@ -182,46 +430,412 @@
     },
     "trailer": {
       "type": "object",
-      "required": ["kind", "counts", "sha256"],
+      "required": [
+        "kind",
+        "counts",
+        "sha256"
+      ],
       "properties": {
-        "kind": { "const": "trailer" },
+        "kind": {
+          "const": "trailer"
+        },
         "counts": {
           "type": "object",
           "required": [
-            "schemaTypes", "vertices", "edges", "observations",
-            "evidence", "beliefs", "vectors"
+            "schemaTypes",
+            "vertices",
+            "edges",
+            "observations",
+            "evidence",
+            "beliefs",
+            "vectors"
           ],
           "properties": {
-            "schemaTypes": { "type": "integer", "minimum": 0 },
-            "vertices": { "type": "integer", "minimum": 0 },
-            "edges": { "type": "integer", "minimum": 0 },
-            "observations": { "type": "integer", "minimum": 0 },
-            "evidence": { "type": "integer", "minimum": 0 },
-            "beliefs": { "type": "integer", "minimum": 0 },
-            "vectors": { "type": "integer", "minimum": 0 }
+            "schemaTypes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "vertices": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "edges": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "observations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "evidence": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "beliefs": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "vectors": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "vertexTombstones": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "description": "Added in v0.2. Absent in a v0.1 trailer, where it means zero \u2014 readers MUST default it rather than reject the older file."
+            },
+            "edgeTombstones": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "description": "Added in v0.2. Absent in a v0.1 trailer, where it means zero \u2014 readers MUST default it rather than reject the older file."
+            }
           },
           "additionalProperties": false
         },
-        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
       },
       "additionalProperties": true
     },
     "unknown_kind": {
-      "description": "Forward compatibility: any object with a string `kind` outside the v0.1 vocabulary is valid at the container level and MUST be skipped by readers.",
+      "description": "Forward compatibility: any object with a string `kind` outside the v0.2 vocabulary is valid at the container level and MUST be skipped by readers.",
       "type": "object",
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "properties": {
         "kind": {
           "type": "string",
           "not": {
             "enum": [
-              "manifest", "schema_type", "vertex", "edge", "observation",
-              "evidence", "belief", "vector", "trailer"
+              "manifest",
+              "schema_type",
+              "vertex",
+              "edge",
+              "observation",
+              "evidence",
+              "belief",
+              "vector",
+              "trailer",
+              "vertex_tombstone",
+              "edge_tombstone"
             ]
           }
         }
       },
       "additionalProperties": true
+    },
+    "author_stamp": {
+      "description": "Advisory provenance. Carried when known; NEVER used to decide a conflict.",
+      "type": "object",
+      "required": [
+        "userId",
+        "subjectType",
+        "authoredAt"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "tokenId": {
+          "type": "string"
+        },
+        "subjectType": {
+          "type": "string",
+          "enum": [
+            "user",
+            "service",
+            "desktop"
+          ]
+        },
+        "authoredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "vertex_tombstone": {
+      "description": "v0.2. A deleted vertex, carried so a re-import propagates the deletion instead of leaving the record alive at the destination forever. Only the vertex and edge planes may be tombstoned: observations are append-only, evidence is cited by other records, and beliefs are derived state.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "kind": {
+          "const": "vertex_tombstone"
+        },
+        "data": {
+          "type": "object",
+          "required": [
+            "id",
+            "deletedAt"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Id of the deleted vertex, in its own plane's id space."
+            },
+            "deletedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the deletion happened AT THE SOURCE."
+            },
+            "author": {
+              "$ref": "#/$defs/author_stamp"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "edge_tombstone": {
+      "description": "v0.2. A deleted edge, carried so a re-import propagates the deletion instead of leaving the record alive at the destination forever. Only the vertex and edge planes may be tombstoned: observations are append-only, evidence is cited by other records, and beliefs are derived state.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "kind": {
+          "const": "edge_tombstone"
+        },
+        "data": {
+          "type": "object",
+          "required": [
+            "id",
+            "deletedAt"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Id of the deleted edge, in its own plane's id space."
+            },
+            "deletedAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When the deletion happened AT THE SOURCE."
+            },
+            "author": {
+              "$ref": "#/$defs/author_stamp"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "propertyValue": {
+      "title": "PropertyValue",
+      "description": "A typed property value. The five bare JSON forms are the original v0.2 encoding and are unchanged. The tagged envelopes were added in v0.3 to carry the SQL types, which are otherwise indistinguishable from strings. An object is an envelope ONLY when it has exactly the keys `$ant` and `v` and `$ant` names a known type; any other object is an ordinary JSON document value.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number",
+          "description": "BIGINT or DOUBLE PRECISION."
+        },
+        {
+          "type": "string",
+          "description": "TEXT."
+        },
+        {
+          "$ref": "#/$defs/propertyEnvelope"
+        },
+        {
+          "type": "object",
+          "description": "JSON/JSONB document value. Excludes the envelope shape so exactly one arm matches: an object that IS a well-formed envelope is the typed value, not a document.",
+          "not": {
+            "$ref": "#/$defs/propertyEnvelope"
+          }
+        },
+        {
+          "type": "array",
+          "description": "Untyped JSON array."
+        }
+      ]
+    },
+    "propertyEnvelope": {
+      "title": "PropertyEnvelope",
+      "description": "A v0.3 tagged value carrying a SQL type.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "DECIMAL/NUMERIC. A canonical decimal STRING, never a JSON number: a JSON number is parsed as an IEEE double by most implementations, which silently rounds money past ~15 significant digits. Trailing fraction zeros are significant (the declared scale).",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "decimal"
+            },
+            "v": {
+              "type": "string",
+              "pattern": "^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "DATE, YYYY-MM-DD.",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "date"
+            },
+            "v": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "TIME, HH:MM:SS[.ffffff].",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "time"
+            },
+            "v": {
+              "type": "string",
+              "pattern": "^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "TIMESTAMP WITH TIME ZONE, RFC3339. The UTC offset is PART OF THE VALUE and must be preserved verbatim; normalizing to Z loses it.",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "timestamp"
+            },
+            "v": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "UUID.",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "uuid"
+            },
+            "v": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "BLOB/BYTEA, base64 (standard alphabet, padded).",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "bytes"
+            },
+            "v": {
+              "type": "string",
+              "contentEncoding": "base64"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "INT.",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "int32"
+            },
+            "v": {
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "SMALLINT.",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "int16"
+            },
+            "v": {
+              "type": "integer",
+              "minimum": -32768,
+              "maximum": 32767
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "SQL array. Elements are themselves property values, so element types are preserved.",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "$ant": {
+              "const": "array"
+            },
+            "v": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/propertyValue"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -1,0 +1,6 @@
+{
+  "major_version.ant": {
+    "mustReject": true,
+    "why": "declares format v1.0; a 0.x reader must refuse rather than misread, because a major bump means field meanings or the container framing changed. Valid in every other respect, so rejecting it for any other reason is the wrong pass."
+  }
+}

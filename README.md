@@ -7,7 +7,7 @@ cross-language conformance suite.
 ## Layout
 
 ```
-SPEC.md                       the normative format specification (v0.1)
+SPEC.md                       the normative format specification (v0.3)
 schema/ant.schema.json        JSON Schema for every record line (source of truth
                               for record shapes; SPEC.md owns container rules)
 bindings/python/openantares.py   reference reader + writer + validator (needs `zstandard`)
@@ -45,10 +45,11 @@ so a diff in the golden bytes always means a format change.
 
 ## Versioning
 
-The container version lives in the manifest (`"version": "0.1"`).
-Readers reject versions they do not support; unknown record kinds and
-additive fields inside known kinds are forward-compatible by
-specification (see SPEC.md §6).
+The container version lives in the manifest (`"version": "0.3"`) as
+`MAJOR.MINOR`. Readers accept any MINOR at the same MAJOR and report
+when a file is ahead of them; a different MAJOR is rejected. Unknown
+record kinds and additive fields inside known kinds are
+forward-compatible by specification (see SPEC.md §3 and §8).
 
 ## License
 

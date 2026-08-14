@@ -147,18 +147,62 @@ def main() -> int:
         "counts mismatch",
     )
 
-    # future version -> rejected up front
+    # A different MAJOR is rejected up front. A newer MINOR is not a
+    # negative any more — see the forward-compat section below.
     future = json.loads(lines[0])
     future["version"] = "9.9"
     expect_error(
-        "future version rejected",
+        "different major version rejected",
         lambda: AntReader(recompress(("\n".join([json.dumps(future, separators=(',', ':'))]
                                                 + lines[1:]) + "\n").encode())),
-        "unsupported format version",
+        "Major versions are not compatible",
+    )
+
+    # An unparsable version is an error, not a guess.
+    bad = json.loads(lines[0])
+    bad["version"] = "banana"
+    expect_error(
+        "malformed version rejected",
+        lambda: AntReader(recompress(("\n".join([json.dumps(bad, separators=(',', ':'))]
+                                                + lines[1:]) + "\n").encode())),
+        "is not MAJOR.MINOR",
     )
 
     # not zstd at all
     expect_error("non-zstd input rejected", lambda: AntReader(b"definitely not zstd"), "zstd")
+
+    print("== negative goldens (must be REJECTED) ==")
+    negatives_path = GOLDEN / "expected_negatives.json"
+    if not negatives_path.exists():
+        check("expected_negatives.json present", False, "missing — regenerate goldens")
+    else:
+        for fname, spec in json.loads(negatives_path.read_text()).items():
+            assert spec.get("mustReject"), f"{fname}: only mustReject negatives are supported"
+            # Contract is "rejected", not a specific message: the error
+            # text differs per implementation, and pinning it would make
+            # the fixture untestable outside Rust.
+            expect_error(f"{fname}: rejected", lambda p=GOLDEN / fname: validate(str(p)), "")
+
+    print("== forward compatibility: a newer MINOR is readable ==")
+    # The policy that makes an additive minor bump safe: same major
+    # reads at any minor, and the reader reports that it saw a subset.
+    #
+    # Rewriting the manifest changes the hashed bytes, so the trailer
+    # has to be recomputed — otherwise this would fail as a sha256
+    # mismatch and prove nothing about versioning.
+    ahead = json.loads(lines[0])
+    ahead["version"] = "0.99"
+    body = [json.dumps(ahead, separators=(",", ":"))] + lines[1:-1]
+    h2 = hashlib.sha256()
+    for line in body:
+        h2.update(line.encode() + b"\n")
+    trailer = json.loads(lines[-1])
+    trailer["sha256"] = h2.hexdigest()
+    stream = body + [json.dumps(trailer, separators=(",", ":"))]
+    r = AntReader(recompress(("\n".join(stream) + "\n").encode()))
+    got = [rec["kind"] for rec in r]
+    check("newer minor still reads", r.verified and len(got) == 7, f"got {got}")
+    check("newer minor is flagged as ahead", r.minor_ahead)
 
     print("== python writer self round-trip ==")
     w = AntWriter(tenantId=7, projectId=3, selection={"kind": "demo"})

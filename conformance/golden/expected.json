@@ -2,11 +2,13 @@
   "basic.ant": {
     "counts": {
       "beliefs": 1,
+      "edgeTombstones": 0,
       "edges": 1,
       "evidence": 1,
       "observations": 1,
       "schemaTypes": 0,
       "vectors": 1,
+      "vertexTombstones": 0,
       "vertices": 2
     },
     "firstVertexId": "deal_1",
@@ -21,16 +23,18 @@
       "vector"
     ],
     "tenantId": 1,
-    "version": "0.1"
+    "version": "0.3"
   },
   "forward_compat.ant": {
     "counts": {
       "beliefs": 0,
+      "edgeTombstones": 0,
       "edges": 0,
       "evidence": 0,
       "observations": 0,
       "schemaTypes": 0,
       "vectors": 0,
+      "vertexTombstones": 0,
       "vertices": 1
     },
     "projectId": 1,
@@ -41,6 +45,29 @@
       "hologram"
     ],
     "tenantId": 1,
-    "version": "0.1"
+    "version": "0.3"
+  },
+  "tombstones.ant": {
+    "counts": {
+      "beliefs": 0,
+      "edgeTombstones": 1,
+      "edges": 1,
+      "evidence": 0,
+      "observations": 0,
+      "schemaTypes": 0,
+      "vectors": 0,
+      "vertexTombstones": 1,
+      "vertices": 1
+    },
+    "firstVertexId": "deal_live",
+    "projectId": 1,
+    "recordKinds": [
+      "vertex",
+      "edge",
+      "vertex_tombstone",
+      "edge_tombstone"
+    ],
+    "tenantId": 1,
+    "version": "0.3"
   }
 }

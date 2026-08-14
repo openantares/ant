@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // OpenAntares conformance suite — JS binding vs the golden files.
 // Mirrors run_conformance.py (minus JSON-Schema validation, which the
-// Python runner covers). Node >= 22.15 (native zstd).
+// Python runner covers). Node >= 22 (native zstd).
 //
 //   node run_conformance.mjs
 
@@ -103,12 +103,23 @@ const fakeTrailer = JSON.stringify({
 });
 expectError("wrong counts rejected", () => drain(pack([...body, fakeTrailer])), "counts mismatch");
 
+// A different MAJOR is rejected up front. A newer MINOR is not a
+// negative any more — see the forward-compat section below.
 const future = JSON.parse(lines[0]);
 future.version = "9.9";
 expectError(
-  "future version rejected",
+  "different major version rejected",
   () => new AntReader(pack([JSON.stringify(future), ...lines.slice(1)])),
-  "unsupported format version",
+  "Major versions are not compatible",
+);
+
+// An unparsable version is an error, not a guess.
+const badVersion = JSON.parse(lines[0]);
+badVersion.version = "banana";
+expectError(
+  "malformed version rejected",
+  () => new AntReader(pack([JSON.stringify(badVersion), ...lines.slice(1)])),
+  "is not MAJOR.MINOR",
 );
 
 expectError(
@@ -116,6 +127,40 @@ expectError(
   () => new AntReader(Buffer.from("definitely not zstd")),
   "zstd",
 );
+
+console.log("== negative goldens (must be REJECTED) ==");
+// Contract is "rejected", not a specific message: the error text
+// differs per implementation, and pinning it would make the fixture
+// untestable outside Rust.
+const negatives = JSON.parse(readFileSync(join(GOLDEN, "expected_negatives.json"), "utf-8"));
+for (const [fname, spec] of Object.entries(negatives)) {
+  if (!spec.mustReject) throw new Error(`${fname}: only mustReject negatives are supported`);
+  expectError(`${fname}: rejected`, () => validate(join(GOLDEN, fname)), "");
+}
+
+console.log("== forward compatibility: a newer MINOR is readable ==");
+// The policy that makes an additive minor bump safe: same major reads
+// at any minor, and the reader reports that it saw a subset.
+//
+// Rewriting the manifest changes the hashed bytes, so the trailer has
+// to be recomputed — otherwise this would fail as a sha256 mismatch and
+// prove nothing about versioning.
+const ahead = JSON.parse(lines[0]);
+ahead.version = "0.99";
+const aheadBody = [JSON.stringify(ahead), ...lines.slice(1, -1)];
+const h2 = createHash("sha256");
+for (const line of aheadBody) h2.update(line + "\n", "utf-8");
+const aheadTrailer = JSON.parse(lines[lines.length - 1]);
+aheadTrailer.sha256 = h2.digest("hex");
+const aheadReader = new AntReader(pack([...aheadBody, JSON.stringify(aheadTrailer)]));
+const aheadKinds = [];
+for (const rec of aheadReader) aheadKinds.push(rec.kind);
+check(
+  "newer minor still reads",
+  aheadReader.verified && aheadKinds.length === 7,
+  JSON.stringify(aheadKinds),
+);
+check("newer minor is flagged as ahead", aheadReader.minorAhead);
 
 const failed = checks.filter(([, ok]) => !ok);
 console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`);

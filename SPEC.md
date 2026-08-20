@@ -308,7 +308,7 @@ should have its `evidence` record included in the same file.
 
 | language | location | role |
 |----------|----------|------|
-| Rust     | `antares-format` crate (Antares engine repository) | canonical writer/reader (the server and CLI use it) |
+| Rust     | `antares-format` crate — canonical, upstream, not in this repository | writer that produces the goldens |
 | Python   | `bindings/python/openantares.py` | reference reader + writer + validator |
 | JavaScript (Node ≥ 22.15) | `bindings/js/openantares.mjs` | reference reader + validator |
 

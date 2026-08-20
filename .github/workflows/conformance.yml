@@ -1,0 +1,46 @@
+name: conformance
+
+# Both reference bindings, against the golden files as checked in. These
+# runners are separate processes from the canonical Rust writer, which
+# lives upstream and cannot see this repository — so if a spec bump lands
+# here without updating a binding, only this workflow catches it.
+on:
+  push:
+    branches: ["**"]
+    tags: ["*"]
+  pull_request:
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: python runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      # zstandard is required; jsonschema is optional in the runner but
+      # pinned here so CI always exercises per-line schema validation
+      # rather than silently skipping it.
+      - run: pip install zstandard jsonschema
+      - run: python3 conformance/run_conformance.py
+
+  javascript:
+    name: javascript runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # 22.15 is the documented floor — node:zlib gained native zstd
+      # there, and the binding cannot start below it. Pinning the floor
+      # rather than latest-22 is what proves the claim in the README.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.15"
+      - run: node --version
+      - run: node conformance/run_conformance.mjs

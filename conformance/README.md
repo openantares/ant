@@ -55,14 +55,14 @@ Because the bump is additive, a v0.2 reader still reads a v0.3 file — it
 just sees the envelopes as plain objects, which is exactly what the
 "minor is ahead of this reader" signal is for.
 
+The two runners in this repository, both of which you can run here:
+
 | implementation | runner | negatives | schema check |
 |----------------|--------|-----------|--------------|
-| Rust (`antares-format`) | `cargo test -p antares-format --test conformance` | covered by the crate's unit tests | n/a (serde types ARE the shapes) |
 | Python | `python3 run_conformance.py` | yes (7) | yes, when `jsonschema` is installed |
 | JavaScript | `node run_conformance.mjs` | yes (7) | covered by the Python runner |
 
-Golden regeneration (deliberate format changes only):
-
-```sh
-cargo run -p antares-format --example gen_conformance
-```
+The goldens themselves are written by `antares-format`, the canonical
+Rust implementation, which is upstream and not part of this repository.
+Regenerating them is an upstream act reserved for deliberate format
+changes; consuming them needs nothing but the runners above.

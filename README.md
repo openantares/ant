@@ -12,36 +12,39 @@ schema/ant.schema.json        JSON Schema for every record line (source of truth
                               for record shapes; SPEC.md owns container rules)
 bindings/python/openantares.py   reference reader + writer + validator (needs `zstandard`)
 bindings/js/openantares.mjs      reference reader + validator (Node >= 22.15, native zstd)
-conformance/                  golden files + runners for all three implementations
+conformance/                  golden files + the two runners you can run here
 ```
-
-The canonical implementation is the `antares-format` Rust crate in the
-Antares engine repository — the server and CLI use it, and it generates
-the conformance goldens.
 
 ## Running the conformance suite
 
-```sh
-# 1. Rust (canonical) — run in the Antares engine repository
-cargo test -p antares-format --test conformance
+Both runners in this repository work against the golden files as
+checked in, with no other setup:
 
-# 2. Python reference binding (pip install zstandard; jsonschema optional
-#    but enables per-line schema validation)
+```sh
+# Python reference binding. `pip install zstandard`; `jsonschema` is
+# optional and adds per-line validation against schema/ant.schema.json.
 python3 conformance/run_conformance.py
 
-# 3. JavaScript reference binding (Node >= 22.15)
+# JavaScript reference binding. Node >= 22.15, which is where
+# node:zlib gained native zstd — earlier versions cannot start it.
 node conformance/run_conformance.mjs
 ```
 
-Regenerating goldens (in the engine repository; only when the format
-deliberately changes):
+Each one reads and fully verifies every golden, rejects the negative
+fixtures, and checks that a newer MINOR stays readable. They are also
+the contract for a third-party implementation: pass these against
+these goldens and your reader is conformant.
 
-```sh
-cargo run -p antares-format --example gen_conformance
-```
+## The goldens and where they come from
+
+The canonical implementation is a Rust crate, `antares-format`. It is
+the writer that produced the golden files, and it is upstream of this
+repository — the spec, schema, bindings and goldens here are published
+from it. It is not part of this repository and you do not need it: the
+goldens are bytes, and the two runners above verify them.
 
 The generator is deterministic — fixed ids and timestamps, no clock —
-so a diff in the golden bytes always means a format change.
+so a diff in the golden bytes always means a deliberate format change.
 
 ## Versioning
 
@@ -53,4 +56,4 @@ forward-compatible by specification (see SPEC.md §3 and §8).
 
 ## License
 
-Apache-2.0 (see [LICENSE](LICENSE)), matching `antares-format`.
+Apache-2.0 — see [LICENSE](LICENSE).

@@ -25,9 +25,8 @@ runner per implementation. Every implementation must:
    input.
 
 Format version: **0.3**. [`../SPEC.md`](../SPEC.md) is normative. The
-engine repo's `docs/specs/ant-v0.3-delta.md` and `ant-v0.2-delta.md`
-record what changed at each bump and the order to apply it in; the spec
-supersedes them where they differ.
+format changelog records what changed at each bump and the order to
+apply it in; the spec supersedes it where they differ.
 
 **v0.3 — SQL property types.** The v0.2 scalar set
 (`null | bool | number | string | object`) could not express DECIMAL,

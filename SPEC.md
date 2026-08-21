@@ -8,10 +8,9 @@ and any third-party reader/writer) must pass the
 [conformance suite](conformance/) against them.
 
 Change notes for the two bumps that produced this version live in the
-engine repo: `docs/specs/ant-v0.2-delta.md` (version policy,
-tombstones, trailer/manifest additions) and `docs/specs/ant-v0.3-delta.md`
-(typed property values). This spec supersedes both; where they differ,
-this document and the golden files win.
+format changelog (v0.2: version policy, tombstones, trailer/manifest
+additions; v0.3: typed property values). This spec supersedes the
+changelog; where they differ, this document and the golden files win.
 
 ## 1. Purpose
 

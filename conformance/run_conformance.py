@@ -145,6 +145,56 @@ def main() -> int:
                     print(f"    {fname}:{i}: {errs[0].message}")
             check(f"{fname}: all lines match ant.schema.json", bad == 0)
 
+        # The schema's conditionals have teeth, or they are decoration.
+        # Each shape below is well-formed JSON of the right kinds and
+        # types; only the rule it breaks tells it apart. The generated
+        # schema derives these rules from the writer's types (the status
+        # variants; `SamplingMethod::field_rule`), so this is where a
+        # regeneration that dropped one would show.
+        print("== schema conditionals (malformed shapes must be rejected) ==")
+        import copy
+        raw = decompress((GOLDEN / "relationship_proposals.ant").read_bytes())
+        proposal = next(
+            json.loads(l) for l in raw.decode().splitlines() if l.strip()
+            and json.loads(l)["kind"] == "relationship_proposal"
+        )
+
+        def with_sampling(**sampling):
+            r = copy.deepcopy(proposal)
+            r["data"]["support"]["sampling"] = sampling
+            return r
+
+        def with_status(status, **fields):
+            r = copy.deepcopy(proposal)
+            for k in ("reason", "receipt"):
+                r["data"].pop(k, None)
+            r["data"]["status"] = status
+            r["data"].update(fields)
+            return r
+
+        receipt = {"reviewer": "user:alice", "reason": "seen the data",
+                   "receipt": "ev_receipt_1", "decidedAt": "2026-08-10T00:00:00Z"}
+        rejected = [
+            ("full_scan with percent", with_sampling(method="full_scan", percent=10.0)),
+            ("full_scan with seed", with_sampling(method="full_scan", seed=7)),
+            ("full_scan with cap", with_sampling(method="full_scan", cap=100)),
+            ("system_repeatable without seed", with_sampling(method="system_repeatable", percent=10.0)),
+            ("bernoulli_repeatable without percent", with_sampling(method="bernoulli_repeatable", seed=7)),
+            ("capped_prefix without cap", with_sampling(method="capped_prefix")),
+            ("promoted_by_reviewer without receipt", with_status("promoted_by_reviewer")),
+            ("quarantined_hypothesis without reason", with_status("quarantined_hypothesis")),
+        ]
+        accepted = [
+            ("system_repeatable with percent and seed", with_sampling(method="system_repeatable", percent=10.0, seed=7)),
+            ("capped_prefix with cap", with_sampling(method="capped_prefix", cap=100)),
+            ("promoted_by_reviewer with receipt", with_status("promoted_by_reviewer", receipt=receipt)),
+            ("refuted with reason", with_status("refuted", reason="the join did not hold")),
+        ]
+        for name, line in rejected:
+            check(f"rejects {name}", not v.is_valid(line))
+        for name, line in accepted:
+            check(f"accepts {name}", v.is_valid(line))
+
     print("== negatives (synthesized from basic.ant) ==")
     good = (GOLDEN / "basic.ant").read_bytes()
     raw = decompress(good)

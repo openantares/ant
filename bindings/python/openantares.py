@@ -30,6 +30,7 @@ try:
 except ImportError as e:  # pragma: no cover
     raise ImportError("openantares needs the `zstandard` package: pip install zstandard") from e
 
+# ---- generated from the Rust types by gen_schema: format facts ----
 FORMAT_MAJOR = 0
 FORMAT_MINOR = 5
 FORMAT_VERSION = f"{FORMAT_MAJOR}.{FORMAT_MINOR}"
@@ -42,12 +43,9 @@ DATA_KINDS = (
     "evidence",
     "belief",
     "vector",
-    # v0.2
     "vertex_tombstone",
     "edge_tombstone",
-    # v0.4
     "contradiction_case",
-    # v0.5
     "relationship_proposal",
 )
 
@@ -66,16 +64,15 @@ _COUNT_KEY = {
     "relationship_proposal": "relationshipProposals",
 }
 
-# Trailer keys added after v0.1 (tombstones in v0.2, contradiction cases
-# in v0.4, relationship proposals in v0.5). Absent in an older trailer,
-# where they mean zero.
+# Trailer keys added after the first version. Absent in an older
+# trailer, where they mean zero.
 _LATER_COUNT_KEYS = (
     "vertexTombstones",
     "edgeTombstones",
     "contradictionCases",
     "relationshipProposals",
 )
-
+# ---- end generated: format facts ----
 
 class AntError(Exception):
     """Any spec violation: not-ant, version, integrity, malformed JSON."""
@@ -160,51 +157,52 @@ def encode_property(type_name, payload):
     return {"$ant": type_name, "v": payload}
 
 
+# ---- generated from the Rust types by gen_schema: counts ----
 @dataclass
 class Counts:
-    schema_types: int = 0
+    schemaTypes: int = 0
     vertices: int = 0
     edges: int = 0
     observations: int = 0
     evidence: int = 0
     beliefs: int = 0
     vectors: int = 0
-    vertex_tombstones: int = 0
-    edge_tombstones: int = 0
-    contradiction_cases: int = 0
-    relationship_proposals: int = 0
+    vertexTombstones: int = 0
+    edgeTombstones: int = 0
+    contradictionCases: int = 0
+    relationshipProposals: int = 0
 
     def as_trailer_dict(self) -> dict:
         return {
-            "schemaTypes": self.schema_types,
+            "schemaTypes": self.schemaTypes,
             "vertices": self.vertices,
             "edges": self.edges,
             "observations": self.observations,
             "evidence": self.evidence,
             "beliefs": self.beliefs,
             "vectors": self.vectors,
-            "vertexTombstones": self.vertex_tombstones,
-            "edgeTombstones": self.edge_tombstones,
-            "contradictionCases": self.contradiction_cases,
-            "relationshipProposals": self.relationship_proposals,
+            "vertexTombstones": self.vertexTombstones,
+            "edgeTombstones": self.edgeTombstones,
+            "contradictionCases": self.contradictionCases,
+            "relationshipProposals": self.relationshipProposals,
         }
 
     def bump(self, kind: str) -> None:
         attr = {
-            "schema_type": "schema_types",
+            "schema_type": "schemaTypes",
             "vertex": "vertices",
             "edge": "edges",
             "observation": "observations",
             "evidence": "evidence",
             "belief": "beliefs",
             "vector": "vectors",
-            "vertex_tombstone": "vertex_tombstones",
-            "edge_tombstone": "edge_tombstones",
-            "contradiction_case": "contradiction_cases",
-            "relationship_proposal": "relationship_proposals",
+            "vertex_tombstone": "vertexTombstones",
+            "edge_tombstone": "edgeTombstones",
+            "contradiction_case": "contradictionCases",
+            "relationship_proposal": "relationshipProposals",
         }[kind]
         setattr(self, attr, getattr(self, attr) + 1)
-
+# ---- end generated: counts ----
 
 @dataclass
 class ReadSummary:

@@ -33,9 +33,6 @@
       "$ref": "#/$defs/vector"
     },
     {
-      "$ref": "#/$defs/trailer"
-    },
-    {
       "$ref": "#/$defs/vertex_tombstone"
     },
     {
@@ -48,11 +45,934 @@
       "$ref": "#/$defs/relationship_proposal"
     },
     {
+      "$ref": "#/$defs/trailer"
+    },
+    {
       "$ref": "#/$defs/unknown_kind"
     }
   ],
   "$defs": {
+    "author_stamp": {
+      "description": "Per-record authorship stamp: advisory provenance, carried when known and NEVER used to decide a conflict. Carried as `Option<AuthorStamp>` on `Observation`, `Belief` and `Evidence` so \"whose call produced this insight\" survives an export, even though every team member writes into the same tenant-scoped store. `None` for records written before authorship existed and for anonymous compat-mode calls.",
+      "type": "object",
+      "required": [
+        "userId",
+        "subjectType",
+        "authoredAt"
+      ],
+      "properties": {
+        "authoredAt": {
+          "description": "Wall-clock time the authoring happened. Distinct from `observed_at` / `extracted_at`, which are content timestamps; this is the persistence timestamp.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "subjectType": {
+          "description": "What class of subject authored the record.",
+          "oneOf": [
+            {
+              "description": "A person, acting through an interactive client.",
+              "type": "string",
+              "const": "user"
+            },
+            {
+              "description": "A service connector or automation.",
+              "type": "string",
+              "const": "service"
+            },
+            {
+              "description": "A desktop client instance.",
+              "type": "string",
+              "const": "desktop"
+            }
+          ]
+        },
+        "tokenId": {
+          "description": "The token id that minted the context, when present. None for local-bootstrap contexts that don't transit a token.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "userId": {
+          "description": "The originating user id. For service tokens this is `\"service:<subject_id>\"` so service-written records are visually distinguishable from human-written ones.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "belief": {
+      "description": "A belief version.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "One version of an inferred fact about a subject. The payload of a `belief` record.",
+          "type": "object",
+          "required": [
+            "id",
+            "tenant_id",
+            "project_id",
+            "subject_id",
+            "predicate",
+            "value_json",
+            "belief_version",
+            "updated_at"
+          ],
+          "properties": {
+            "author": {
+              "description": "Which user authored this belief directly. For a human-written belief this is a human author's user id; for a belief produced by an automated materializer this is the service identity that ran the materialization step.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/author_stamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "belief_version": {
+              "description": "Server-assigned. Monotonically increasing per (`subject_id`, `predicate`) pair. Latest version supersedes older ones; history is retained.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "confidence": {
+              "description": "Confidence in `[0,1]`; `None` when the producer does not score.",
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            },
+            "contributing_authors": {
+              "description": "Union of `author.user_id` across every source observation (and chained source belief, when derivations are stacked) consumed to produce this belief. Lets downstream queries answer \"this belief is built on whose contributions?\". Deduplicated and sorted at write time. Empty for human-written beliefs that aren't derived from anything.",
+              "type": "array",
+              "items": {
+                "description": "Stable identifier for a user.",
+                "type": "string"
+              }
+            },
+            "decay_policy": {
+              "description": "Optional decay policy hint (e.g. `\"halflife_days=14\"`). Stored but not applied here; consumers may interpret it.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "derived_from": {
+              "description": "Observations that this belief was derived from. Empty for beliefs that don't yet have a traced derivation chain (allowed but discouraged).",
+              "type": "array",
+              "items": {
+                "description": "Stable identifier for an observation.",
+                "type": "string"
+              }
+            },
+            "evidence_ids": {
+              "description": "Evidence accumulated from `derived_from` observations (and optionally extra evidence the materializer attached directly).",
+              "type": "array",
+              "items": {
+                "description": "Evidence identifier (newtype over String). Distinct from VertexId because evidence lives in its own storage plane.",
+                "type": "string"
+              }
+            },
+            "id": {
+              "description": "Server-assigned. Unique per version.",
+              "type": "string"
+            },
+            "metadata": {
+              "description": "Free-form metadata for materializer-specific extras."
+            },
+            "observed_at": {
+              "description": "Wall-clock time the underlying facts were observed.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "predicate": {
+              "description": "What aspect of the subject this belief is about. Examples: `role_in_deal`, `compliance_gate_state`, `buying_committee_state`, `usage_trend`, `attention_leverage`, `renewal_risk`, `expansion_readiness`.",
+              "type": "string"
+            },
+            "project_id": {
+              "description": "Owning project.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "subject_id": {
+              "description": "The vertex this belief is about.",
+              "type": "string"
+            },
+            "tenant_id": {
+              "description": "Owning tenant.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "updated_at": {
+              "description": "Server-assigned. Wall-clock time of the version's insertion.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "valid_from": {
+              "description": "Start of real-world validity; `None` = always was.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "valid_to": {
+              "description": "End of real-world validity (exclusive); `None` = still holds.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "value_json": {
+              "description": "The inferred value as JSON. Can be a string, number, boolean, or structured object. Direction-neutral by construction."
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "belief"
+        }
+      },
+      "additionalProperties": true
+    },
+    "claim_ref": {
+      "description": "One exact claim revision the case compares.",
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "description": "The record id on that plane.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "The plane the claim lives on.",
+          "oneOf": [
+            {
+              "description": "A belief version (`belief` record; `version` pins it).",
+              "type": "string",
+              "const": "belief"
+            },
+            {
+              "description": "An observation (`observation` record).",
+              "type": "string",
+              "const": "observation"
+            },
+            {
+              "description": "A stretch of source material (`evidence` record plus pointer).",
+              "type": "string",
+              "const": "evidence"
+            }
+          ]
+        },
+        "pointer": {
+          "description": "Where in the source the claim sits, when `kind` is `evidence`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/source_pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "description": "The belief version, when `kind` is `belief`. A belief id is unique per version already; the version is carried so a reader can see WHICH version was compared without resolving the id.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "comparator_identity": {
+      "description": "Who or what produced this comparison, pinned to versions and to the snapshot it ran against, so the same question can be re-asked against the same inputs.",
+      "type": "object",
+      "required": [
+        "comparator",
+        "comparatorVersion"
+      ],
+      "properties": {
+        "comparator": {
+          "description": "The comparator (`numeric_tolerance`, `date_overlap`, …).",
+          "type": "string"
+        },
+        "comparatorVersion": {
+          "description": "Its version.",
+          "type": "string"
+        },
+        "model": {
+          "description": "The model consulted, when one was.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modelVersion": {
+          "description": "That model's version.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ruleId": {
+          "description": "The rule it applied, when a rule drove it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ruleVersion": {
+          "description": "That rule's version.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snapshotId": {
+          "description": "The snapshot of the world the comparison ran against.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "contradiction_case": {
+      "description": "One immutable revision of a contradiction case (v0.4). Every id it references MUST resolve inside the same file (SPEC.md §5.2).",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "One immutable revision of a contradiction case (v0.4): two or more exact claim revisions compared, with epistemic, business-impact and workflow state kept separate. Every id it references MUST resolve inside the same file, and a previous revision MUST precede its successor (SPEC.md §5.2).",
+          "type": "object",
+          "required": [
+            "id",
+            "caseId",
+            "tenantId",
+            "projectId",
+            "family",
+            "claims",
+            "comparator",
+            "epistemic",
+            "impact",
+            "workflow",
+            "revisedAt"
+          ],
+          "properties": {
+            "author": {
+              "description": "Who authored this revision, when known. Advisory.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/author_stamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "caseId": {
+              "description": "The stable case id every revision shares.",
+              "type": "string"
+            },
+            "claims": {
+              "description": "Two or more exact claim revisions compared.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/claim_ref"
+              }
+            },
+            "comparator": {
+              "description": "What produced the comparison, and against which snapshot.",
+              "$ref": "#/$defs/comparator_identity"
+            },
+            "epistemic": {
+              "description": "What the evidence says.",
+              "oneOf": [
+                {
+                  "description": "The claims cannot both hold.",
+                  "type": "string",
+                  "const": "incompatible"
+                },
+                {
+                  "description": "The claims hold together; the case is a non-case on the merits.",
+                  "type": "string",
+                  "const": "compatible"
+                },
+                {
+                  "description": "Not decidable on the material at hand.",
+                  "type": "string",
+                  "const": "uncertain"
+                },
+                {
+                  "description": "The claims are not about the same thing closely enough to compare — the shape a model-invented shared subject takes.",
+                  "type": "string",
+                  "const": "insufficiently_comparable"
+                }
+              ]
+            },
+            "evidence": {
+              "description": "Source positions relied on beyond the claims.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/evidence_ref"
+              }
+            },
+            "family": {
+              "description": "The comparison family the case belongs to: the kind of question being asked (`same_subject_numeric`, `date_overlap`, …). Cases are compared within a family, never across.",
+              "type": "string"
+            },
+            "id": {
+              "description": "This revision's id. Unique per record; never rewritten.",
+              "type": "string"
+            },
+            "impact": {
+              "description": "What it would cost.",
+              "oneOf": [
+                {
+                  "description": "Acting on the wrong claim would cause harm.",
+                  "type": "string",
+                  "const": "harmful"
+                },
+                {
+                  "description": "Only alignment between sources is at stake.",
+                  "type": "string",
+                  "const": "alignment_only"
+                },
+                {
+                  "description": "Nobody has assessed it yet.",
+                  "type": "string",
+                  "const": "unassessed"
+                }
+              ]
+            },
+            "measurements": {
+              "description": "Measured values the comparator used.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/measurement_ref"
+              }
+            },
+            "metadata": {
+              "description": "Producer-specific extras. Free-form, never interpreted here."
+            },
+            "previousRevisionId": {
+              "description": "The revision this one supersedes; `None` for the first.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "projectId": {
+              "description": "Owning project.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "proposalId": {
+              "description": "The proposal this case is linked to, when one exists.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "refuting": {
+              "description": "Material refuting it.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/material"
+              }
+            },
+            "reviewReceipts": {
+              "description": "Review receipts: evidence records recording who reviewed what and decided how. Referenced, so they travel with the case.",
+              "type": "array",
+              "items": {
+                "description": "Evidence identifier (newtype over String). Distinct from VertexId because evidence lives in its own storage plane.",
+                "type": "string"
+              }
+            },
+            "revisedAt": {
+              "description": "When this revision was authored.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "supporting": {
+              "description": "Material supporting the incompatibility.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/material"
+              }
+            },
+            "tenantId": {
+              "description": "Owning tenant.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "vaultOccurrences": {
+              "description": "Where the claims occur in a vault.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/vault_occurrence"
+              }
+            },
+            "workflow": {
+              "description": "Where the work stands.",
+              "oneOf": [
+                {
+                  "description": "Raised, nobody has acted.",
+                  "type": "string",
+                  "const": "open"
+                },
+                {
+                  "description": "A question is out to a source or an author.",
+                  "type": "string",
+                  "const": "awaiting_clarification"
+                },
+                {
+                  "description": "Ready for a reviewer.",
+                  "type": "string",
+                  "const": "awaiting_review"
+                },
+                {
+                  "description": "Reviewers disagree.",
+                  "type": "string",
+                  "const": "contested"
+                },
+                {
+                  "description": "Parked on purpose.",
+                  "type": "string",
+                  "const": "deferred"
+                },
+                {
+                  "description": "Closed with a resolution.",
+                  "type": "string",
+                  "const": "settled"
+                },
+                {
+                  "description": "Settled once, then reopened by a later revision.",
+                  "type": "string",
+                  "const": "reopened"
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "contradiction_case"
+        }
+      },
+      "additionalProperties": true
+    },
+    "counts": {
+      "description": "Per-kind record tallies, carried in the trailer and checked by the reader against what it actually saw.",
+      "type": "object",
+      "required": [
+        "schemaTypes",
+        "vertices",
+        "edges",
+        "observations",
+        "evidence",
+        "beliefs",
+        "vectors"
+      ],
+      "properties": {
+        "beliefs": {
+          "description": "`belief` records.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "contradictionCases": {
+          "description": "`contradiction_case` records. Added in v0.4. Absent in a trailer written before v0.4, where it means zero — readers MUST default it rather than reject the older file; an older reader ignores the key.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
+        },
+        "edgeTombstones": {
+          "description": "`edge_tombstone` records. Added in v0.2. Absent in a v0.1 trailer, where it means zero — readers MUST default it rather than reject the older file.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
+        },
+        "edges": {
+          "description": "`edge` records.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "evidence": {
+          "description": "`evidence` records.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "observations": {
+          "description": "`observation` records.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "relationshipProposals": {
+          "description": "`relationship_proposal` records. Added in v0.5. Absent in a trailer written before v0.5, where it means zero — readers MUST default it rather than reject the older file; an older reader ignores the key.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
+        },
+        "schemaTypes": {
+          "description": "`schema_type` records.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "vectors": {
+          "description": "`vector` records.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "vertexTombstones": {
+          "description": "`vertex_tombstone` records. Added in v0.2. Absent in a v0.1 trailer, where it means zero — readers MUST default it rather than reject the older file.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
+        },
+        "vertices": {
+          "description": "`vertex` records.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "edge": {
+      "description": "A graph edge.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "A directed, labeled edge between two vertices, with optional bitemporal validity. The payload of an `edge` record.",
+          "type": "object",
+          "required": [
+            "id",
+            "src",
+            "src_type",
+            "dst",
+            "dst_type",
+            "label",
+            "properties"
+          ],
+          "properties": {
+            "properties": {
+              "description": "Typed properties carried on the edge, keyed by property name.",
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/propertyValue"
+              }
+            },
+            "confidence": {
+              "description": "Confidence in `[0,1]` for the fact. `None` is treated as 1.0 for matching purposes.",
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            },
+            "dst": {
+              "description": "Destination vertex id.",
+              "type": "string"
+            },
+            "dst_type": {
+              "description": "Destination vertex type.",
+              "type": "string"
+            },
+            "evidenced_by": {
+              "description": "First-class evidence references. Empty by default (backwards-compatible with older payloads).",
+              "type": "array",
+              "items": {
+                "description": "Evidence identifier (newtype over String). Distinct from VertexId because evidence lives in its own storage plane.",
+                "type": "string"
+              }
+            },
+            "extracted_at": {
+              "description": "Wall-clock time the extractor produced it.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "id": {
+              "description": "Edge id, unique within the scope.",
+              "type": "string"
+            },
+            "label": {
+              "description": "Relation name (e.g. \"hasStakeholder\"), NOT namespace-qualified.",
+              "type": "string"
+            },
+            "observed_at": {
+              "description": "Wall-clock time the fact was recorded.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "src": {
+              "description": "Source vertex id.",
+              "type": "string"
+            },
+            "src_type": {
+              "description": "Source vertex type.",
+              "type": "string"
+            },
+            "valid_from": {
+              "description": "Start of real-world validity; `None` = always was.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "valid_to": {
+              "description": "End of real-world validity (exclusive); `None` = still holds.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "edge"
+        }
+      },
+      "additionalProperties": true
+    },
+    "edge_tombstone": {
+      "description": "Deletion of an edge (v0.2), carried so a re-import propagates the deletion instead of leaving the record alive at the destination forever. Only the vertex and edge planes may be tombstoned: observations are append-only, evidence is cited by other records, and beliefs are derived state.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "The deletion.",
+          "$ref": "#/$defs/tombstone"
+        },
+        "kind": {
+          "type": "string",
+          "const": "edge_tombstone"
+        }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "description": "An evidence record.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "A source-bound piece of supporting material: where it came from, the literal content, and optional span offsets into the source. The payload of an `evidence` record.",
+          "type": "object",
+          "required": [
+            "id",
+            "tenant_id",
+            "project_id",
+            "source_uri",
+            "source_type",
+            "source_id",
+            "content"
+          ],
+          "properties": {
+            "author": {
+              "description": "Which user persisted this evidence. `None` for older records and for anonymous calls.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/author_stamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "byte_end": {
+              "description": "Byte offset of the span end in the source, exclusive.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            },
+            "byte_start": {
+              "description": "Byte offset of the span start in the source, inclusive.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            },
+            "char_end": {
+              "description": "Character offset of the span end in the source, exclusive.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "char_start": {
+              "description": "Character offset of the span start in the source, inclusive.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "confidence": {
+              "description": "Confidence in `[0,1]`. `None` = treated as 1.0.",
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "float"
+            },
+            "content": {
+              "description": "The literal text/data the evidence points at. Required.",
+              "type": "string"
+            },
+            "extracted_at": {
+              "description": "Wall-clock time the extractor produced this record.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "extractor_version": {
+              "description": "Version tag of the producing extractor, verbatim.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Evidence id, unique within the scope.",
+              "type": "string"
+            },
+            "metadata": {
+              "description": "Free-form metadata. Use sparingly — first-class fields above are preferred."
+            },
+            "observed_at": {
+              "description": "Wall-clock time the source event happened or was seen.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "project_id": {
+              "description": "Owning project.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "source_id": {
+              "description": "Identifier of the source event/artifact (e.g. \"meeting_001\", \"email_001\"). Required.",
+              "type": "string"
+            },
+            "source_type": {
+              "description": "What kind of source: \"transcript\" | \"email_event\" | \"crm_field\" | ...",
+              "type": "string"
+            },
+            "source_uri": {
+              "description": "URI/path of the source artifact (e.g. \"s3://antares/calls/2026-04-29.vtt\" or \"antares://transcripts/meeting_001\"). Required.",
+              "type": "string"
+            },
+            "tenant_id": {
+              "description": "Owning tenant.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "evidence"
+        }
+      },
+      "additionalProperties": true
+    },
+    "evidence_ref": {
+      "description": "A source position the case relies on beyond the claims themselves.",
+      "type": "object",
+      "required": [
+        "evidenceId"
+      ],
+      "properties": {
+        "evidenceId": {
+          "description": "The evidence record.",
+          "type": "string"
+        },
+        "pointer": {
+          "description": "Where inside it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/source_pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
     "manifest": {
+      "description": "The first record of every stream: what this file is, which scope it came from, and what it claims to contain.",
       "type": "object",
       "required": [
         "kind",
@@ -62,379 +982,1459 @@
         "projectId"
       ],
       "properties": {
-        "kind": {
-          "const": "manifest"
-        },
         "format": {
+          "description": "Always \"antares\" — belt for the zstd-magic braces.",
           "const": "antares"
         },
-        "version": {
-          "type": "string"
-        },
-        "tenantId": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "projectId": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "selection": {},
         "createdAt": {
-          "type": "string"
+          "description": "When the export was produced.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "kind": {
+          "type": "string",
+          "const": "manifest"
         },
         "producer": {
+          "description": "Producer identifier (server version, tool).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projectId": {
+          "description": "Originating project id.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "selection": {
+          "description": "Free-form description of what was selected (whole scope, seed query, digest params...). Recorded verbatim, not interpreted."
+        },
+        "tenantId": {
+          "description": "Originating tenant id.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "version": {
+          "description": "`MAJOR.MINOR` version of this container layout.",
           "type": "string"
         }
       },
       "additionalProperties": true
     },
-    "schema_type": {
+    "material": {
+      "description": "Material that supports or refutes the incompatibility, with its source dependency: a forwarded copy or a derivation is not an independent witness of the source it names in `of`.",
       "type": "object",
       "required": [
-        "kind",
-        "data"
+        "evidenceId",
+        "dependency"
       ],
       "properties": {
-        "kind": {
-          "const": "schema_type"
+        "dependency": {
+          "description": "Whether it stands on its own.",
+          "$ref": "#/$defs/source_dependency"
         },
-        "data": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": true
-    },
-    "vertex": {
-      "type": "object",
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "vertex"
+        "evidenceId": {
+          "description": "The evidence record.",
+          "type": "string"
         },
-        "data": {
-          "type": "object",
-          "required": [
-            "id",
-            "label"
-          ],
-          "properties": {
-            "id": {
-              "type": "string"
+        "pointer": {
+          "description": "Where inside it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/source_pointer"
             },
-            "name": {
-              "type": "string"
-            },
-            "label": {
-              "type": "string"
-            },
-            "properties": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/propertyValue"
-              }
+            {
+              "type": "null"
             }
-          },
-          "additionalProperties": true
+          ]
         }
       },
       "additionalProperties": true
     },
-    "edge": {
+    "measurement_ref": {
+      "description": "A measured value the comparator used — the two numbers compared, a distance, a tolerance — referenced back to where it was read.",
       "type": "object",
       "required": [
-        "kind",
-        "data"
+        "name",
+        "value"
       ],
       "properties": {
-        "kind": {
-          "const": "edge"
+        "evidenceId": {
+          "description": "The evidence the measurement was read from, when it was.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
-        "data": {
+        "name": {
+          "description": "What was measured (`amount_a`, `distance`, `tolerance`).",
+          "type": "string"
+        },
+        "pointer": {
+          "description": "Where inside that evidence.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/source_pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "description": "Unit, when the value has one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "description": "The value, as JSON."
+        }
+      },
+      "additionalProperties": true
+    },
+    "normalization": {
+      "description": "Normalization declared on a relationship: what is applied to the source key, and what is applied to the target key. Two operators, not one, because \"the source has trailing spaces\" and \"the target is stored lowercased\" are different facts. The export applies each to its own side and then RESOLVES: it looks the normalized source value up among the normalized target keys and uses the identity of the row it found. It does not transform the source string and assume the result names a target — that assumption invents an id for every value that has no target row.",
+      "type": "object",
+      "required": [
+        "source"
+      ],
+      "properties": {
+        "source": {
+          "description": "Applied to the source key.",
+          "$ref": "#/$defs/normalization_op"
+        },
+        "target": {
+          "description": "Defaults to the same operator as the source side.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/normalization_op"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "normalization_op": {
+      "description": "A normalization applied to BOTH sides of a join before matching. The operator is executable, with exact PostgreSQL semantics, so the export can reproduce the comparison the measurement made. It is not a transformation of the source value into a target id: see [`Normalization`] for why that distinction is the whole point. On the wire a cast is the object form; the rest are strings.",
+      "oneOf": [
+        {
+          "description": "`btrim(x)` — PostgreSQL's `trim(both from x)`.",
+          "type": "string",
+          "const": "trim"
+        },
+        {
+          "description": "`lower(x)`.",
+          "type": "string",
+          "const": "lower"
+        },
+        {
+          "description": "`lower(btrim(x))`, in that order.",
+          "type": "string",
+          "const": "trim_lower"
+        },
+        {
+          "description": "An explicit cast, e.g. a text column joined against a bigint key.",
           "type": "object",
           "required": [
-            "id",
-            "src",
-            "dst",
-            "label"
+            "cast"
           ],
           "properties": {
-            "id": {
-              "type": "string"
-            },
-            "src": {
-              "type": "string"
-            },
-            "src_type": {
-              "type": "string"
-            },
-            "dst": {
-              "type": "string"
-            },
-            "dst_type": {
-              "type": "string"
-            },
-            "label": {
-              "type": "string"
-            },
-            "properties": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/propertyValue"
-              }
-            },
-            "confidence": {
-              "type": [
-                "number",
-                "null"
+            "cast": {
+              "description": "Casts the contract admits. Deliberately narrow: each one has unambiguous PostgreSQL semantics and a total ordering that a chunked read can rely on.",
+              "oneOf": [
+                {
+                  "description": "`text`.",
+                  "type": "string",
+                  "const": "text"
+                },
+                {
+                  "description": "`bigint`.",
+                  "type": "string",
+                  "const": "bigint"
+                },
+                {
+                  "description": "`numeric`.",
+                  "type": "string",
+                  "const": "numeric"
+                },
+                {
+                  "description": "`uuid`.",
+                  "type": "string",
+                  "const": "uuid"
+                },
+                {
+                  "description": "`date`.",
+                  "type": "string",
+                  "const": "date"
+                },
+                {
+                  "description": "`timestamptz`.",
+                  "type": "string",
+                  "const": "timestamptz"
+                }
               ]
-            },
-            "evidenced_by": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
             }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": true
+      ]
     },
     "observation": {
+      "description": "An observation.",
       "type": "object",
       "required": [
         "kind",
         "data"
       ],
       "properties": {
-        "kind": {
-          "const": "observation"
-        },
         "data": {
+          "description": "An atomic, source-bound fact about a subject. Append-only: once an observation is stored, it cannot be modified. Re-submitting identical content under the same id is a no-op (idempotent). Re-submitting different content under the same id is a conflict.",
           "type": "object",
           "required": [
             "id",
+            "tenant_id",
+            "project_id",
             "predicate",
-            "observed_at"
+            "observed_at",
+            "extracted_at"
           ],
           "properties": {
-            "id": {
-              "type": "string"
-            },
-            "tenant_id": {
-              "type": "integer"
-            },
-            "project_id": {
-              "type": "integer"
-            },
-            "subject_id": {
-              "type": [
-                "string",
-                "null"
+            "author": {
+              "description": "Which user authored this observation. `None` for older records and for anonymous calls. Set by the writer from the resolved authentication context at write time.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/author_stamp"
+                },
+                {
+                  "type": "null"
+                }
               ]
-            },
-            "predicate": {
-              "type": "string"
-            },
-            "object_id": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "object_value": {},
-            "observed_at": {
-              "type": "string"
-            },
-            "extracted_at": {
-              "type": "string"
             },
             "confidence": {
+              "description": "Confidence in `[0,1]`; `None` is treated as 1.0.",
               "type": [
                 "number",
                 "null"
-              ]
+              ],
+              "format": "float"
             },
             "evidence_ids": {
+              "description": "First-class evidence references. Each Observation should point at one or more Evidence records that back it.",
               "type": "array",
               "items": {
+                "description": "Evidence identifier (newtype over String). Distinct from VertexId because evidence lives in its own storage plane.",
                 "type": "string"
               }
+            },
+            "extracted_at": {
+              "description": "Wall-clock time the extractor produced this observation.",
+              "type": "string",
+              "format": "date-time"
             },
             "extractor_version": {
+              "description": "Version tag of the producing extractor, verbatim.",
               "type": [
                 "string",
                 "null"
               ]
-            }
-          },
-          "additionalProperties": true
-        }
-      },
-      "additionalProperties": true
-    },
-    "evidence": {
-      "type": "object",
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "evidence"
-        },
-        "data": {
-          "type": "object",
-          "required": [
-            "id",
-            "source_type",
-            "source_id",
-            "content"
-          ],
-          "properties": {
+            },
             "id": {
+              "description": "Observation id, unique within the scope.",
               "type": "string"
             },
-            "tenant_id": {
-              "type": "integer"
+            "metadata": {
+              "description": "Free-form metadata for extractor-specific extras."
             },
-            "project_id": {
-              "type": "integer"
+            "object_id": {
+              "description": "Object of the predicate when the observation is relational.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
-            "source_uri": {
-              "type": "string"
+            "object_value": {
+              "description": "Object as a literal value when the observation isn't relational (e.g. \"SOC2 was mentioned\" → object_value = \"SOC2\"; \"page opens count\" → object_value = 5)."
             },
-            "source_type": {
-              "type": "string"
-            },
-            "source_id": {
-              "type": "string"
-            },
-            "content": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": true
-        }
-      },
-      "additionalProperties": true
-    },
-    "belief": {
-      "type": "object",
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "belief"
-        },
-        "data": {
-          "type": "object",
-          "required": [
-            "id",
-            "subject_id",
-            "predicate"
-          ],
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "tenant_id": {
-              "type": "integer"
-            },
-            "project_id": {
-              "type": "integer"
-            },
-            "subject_id": {
-              "type": "string"
+            "observed_at": {
+              "description": "Wall-clock time the underlying event happened.",
+              "type": "string",
+              "format": "date-time"
             },
             "predicate": {
+              "description": "What was observed about the subject. Free-form string — common values include \"joined_review\", \"mentioned_topic\", \"viewed\", \"opened_email\", \"forwarded_to\", \"went_silent\", \"usage_dropped\".",
               "type": "string"
             },
-            "value_json": {},
-            "belief_version": {
-              "type": "integer"
+            "project_id": {
+              "description": "Owning project.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
             },
-            "derived_from": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+            "source_event_id": {
+              "description": "Identifier of the source event (e.g. \"meeting_001\", \"email_002\", \"crm_webhook_2026-04-29T18:02\"). Optional because some observations are aggregated (e.g. \"champion silent for 14 days\") and don't tie to a single event.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
-            "evidence_ids": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+            "source_uri": {
+              "description": "URI of the source artifact (e.g. \"antares://transcripts/m1#1240-1295\"). Optional and may duplicate `evidence_ids[0].source_uri`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "subject_id": {
+              "description": "Subject of the observation — typically a deal, person, meeting, or email vertex. Optional for observations that aren't anchored to a specific entity (e.g. aggregate behavioral signals).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "tenant_id": {
+              "description": "Owning tenant.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
             }
           },
           "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "observation"
         }
       },
       "additionalProperties": true
     },
-    "vector": {
+    "probe_ref": {
+      "description": "One SQL probe the loop ran to measure a proposal, kept so the measurement can be re-derived rather than believed. `statement` is the statement AS EXECUTED, parameterized — never with customer values inlined. `evidenceId`, when present, MUST resolve inside the file.",
+      "type": "object",
+      "required": [
+        "name",
+        "statement",
+        "dialect"
+      ],
+      "properties": {
+        "dialect": {
+          "description": "The SQL dialect the statement is written in.",
+          "type": "string"
+        },
+        "evidenceId": {
+          "description": "The evidence record holding what the probe returned, when the loop recorded one. Referenced, so it travels with the proposal and is closure-checked.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "What the probe measured (`matched_rows`, `target_distinct`).",
+          "type": "string"
+        },
+        "ranAt": {
+          "description": "When it ran.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "statement": {
+          "description": "The statement AS EXECUTED, parameterized — never with customer values inlined. A probe is a question about a shape.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "propertyEnvelope": {
+      "title": "PropertyEnvelope",
+      "description": "A v0.3 tagged value carrying a SQL type.",
+      "oneOf": [
+        {
+          "description": "DECIMAL/NUMERIC. A canonical decimal STRING, never a JSON number: a JSON number is parsed as an IEEE double by most implementations, which silently rounds money past ~15 significant digits. Trailing fraction zeros are significant (the declared scale).",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "decimal"
+            },
+            "v": {
+              "type": "string",
+              "pattern": "^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?$"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "DATE, YYYY-MM-DD.",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "date"
+            },
+            "v": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "TIME, HH:MM:SS[.ffffff].",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "time"
+            },
+            "v": {
+              "type": "string",
+              "pattern": "^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "TIMESTAMP WITH TIME ZONE, RFC3339. The UTC offset is PART OF THE VALUE and must be preserved verbatim; normalizing to Z loses it.",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "timestamp"
+            },
+            "v": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "UUID.",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "uuid"
+            },
+            "v": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "BLOB/BYTEA, base64 (standard alphabet, padded).",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "bytes"
+            },
+            "v": {
+              "type": "string",
+              "contentEncoding": "base64"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "INT.",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "int32"
+            },
+            "v": {
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "SMALLINT.",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "int16"
+            },
+            "v": {
+              "type": "integer",
+              "minimum": -32768,
+              "maximum": 32767
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "SQL array. Elements are themselves property values, so element types are preserved.",
+          "type": "object",
+          "required": [
+            "$ant",
+            "v"
+          ],
+          "properties": {
+            "$ant": {
+              "const": "array"
+            },
+            "v": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/propertyValue"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "propertyValue": {
+      "title": "PropertyValue",
+      "description": "A typed property value. The five bare JSON forms are the original v0.2 encoding and are unchanged. The tagged envelopes were added in v0.3 to carry the SQL types, which are otherwise indistinguishable from strings. An object is an envelope ONLY when it has exactly the keys `$ant` and `v` and `$ant` names a known type; any other object is an ordinary JSON document value.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "description": "BIGINT or DOUBLE PRECISION.",
+          "type": "number"
+        },
+        {
+          "description": "TEXT.",
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/propertyEnvelope"
+        },
+        {
+          "description": "JSON/JSONB document value. Excludes the envelope shape so exactly one arm matches: an object that IS a well-formed envelope is the typed value, not a document.",
+          "type": "object",
+          "additionalProperties": true,
+          "not": {
+            "$ref": "#/$defs/propertyEnvelope"
+          }
+        },
+        {
+          "description": "Untyped JSON array.",
+          "type": "array"
+        }
+      ]
+    },
+    "property_def": {
+      "description": "A property declaration on a [`SchemaType`].",
+      "type": "object",
+      "required": [
+        "name",
+        "value_type"
+      ],
+      "properties": {
+        "index": {
+          "description": "Index declaration, if the property is indexed.",
+          "oneOf": [
+            {
+              "description": "Full-text index only.",
+              "type": "string",
+              "const": "TEXT"
+            },
+            {
+              "description": "Vector (embedding) index only.",
+              "type": "string",
+              "const": "VECTOR"
+            },
+            {
+              "description": "Both full-text and vector.",
+              "type": "string",
+              "const": "TEXT_AND_VECTOR"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Property name as it appears on records.",
+          "type": "string"
+        },
+        "name_zh": {
+          "description": "Chinese display name, when the schema source provides one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value_type": {
+          "description": "Declared value type.",
+          "$ref": "#/$defs/value_type"
+        }
+      },
+      "additionalProperties": true
+    },
+    "proposal_origin": {
+      "description": "The run that produced a proposal, the version of the loop that ran, and the source manifest it read. Two proposals from different loop versions are not the same claim even when they name the same join. A model that suggested the join is recorded so its suggestions can be graded — the measurement is still what decides.",
+      "type": "object",
+      "required": [
+        "runId",
+        "reconVersion",
+        "sourceManifest"
+      ],
+      "properties": {
+        "model": {
+          "description": "The model consulted, when one was. A proposal a model suggested and a probe measured is still measured; the model is recorded so its suggestions can be graded.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modelVersion": {
+          "description": "That model's version.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reconVersion": {
+          "description": "The reconnaissance loop's own version.",
+          "type": "string"
+        },
+        "runId": {
+          "description": "The run id, as the loop stamps it.",
+          "type": "string"
+        },
+        "sourceManifest": {
+          "description": "The source manifest the run read under.",
+          "$ref": "#/$defs/source_manifest_ref"
+        }
+      },
+      "additionalProperties": true
+    },
+    "proposed_relation": {
+      "description": "The relationship being proposed, in the mapper's own terms: which types, which relations, which columns, and what is applied to both sides before they are compared. The key column lists have the same length — a join compares one column to one column.",
+      "type": "object",
+      "required": [
+        "subjectType",
+        "predicate",
+        "targetType",
+        "sourceRelation",
+        "sourceKeyColumns",
+        "targetRelation",
+        "targetKeyColumns"
+      ],
+      "properties": {
+        "normalization": {
+          "description": "What is applied to each side before matching. Absent means the values are compared as they are stored.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/normalization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "predicate": {
+          "description": "The predicate the edge would carry.",
+          "type": "string"
+        },
+        "sourceKeyColumns": {
+          "description": "The source-side join columns, in order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sourceRelation": {
+          "description": "The source relation, spelled as the source spells it.",
+          "type": "string"
+        },
+        "subjectType": {
+          "description": "The subject vertex type the edge would leave.",
+          "type": "string"
+        },
+        "targetKeyColumns": {
+          "description": "The target-side join columns, in order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "targetRelation": {
+          "description": "The target relation.",
+          "type": "string"
+        },
+        "targetType": {
+          "description": "The target vertex type the edge would reach.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "relation_def": {
+      "description": "A relation (edge type) declaration on a [`SchemaType`].",
+      "type": "object",
+      "required": [
+        "name",
+        "target"
+      ],
+      "properties": {
+        "properties": {
+          "description": "Properties carried on the edge itself (rare; commonly empty).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/property_def"
+          }
+        },
+        "name": {
+          "description": "Relation name as it appears on edges.",
+          "type": "string"
+        },
+        "name_zh": {
+          "description": "Chinese display name, when the schema source provides one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "description": "Target type the relation points at.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "relation_support": {
+      "description": "The measurement behind a proposed relationship (the mapper's evidence contract): the denominator, the numerator, the target side's uniqueness, how it was sampled, a fingerprint tying it to the run, and the threshold it was judged against. A ratio without the bar it cleared is not a claim.",
+      "type": "object",
+      "required": [
+        "contractVersion",
+        "method",
+        "methodVersion",
+        "sourceRows",
+        "sourceNonNull",
+        "matchedRows",
+        "targetRows",
+        "targetNonNull",
+        "targetDistinct",
+        "sampling",
+        "fingerprint",
+        "minSupport"
+      ],
+      "properties": {
+        "contractVersion": {
+          "description": "[`SUPPORT_CONTRACT_VERSION`] this record was written against.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "fingerprint": {
+          "description": "Fingerprint of the raw measurement (the server's own digest of the counts and the query that produced them), so a published record can be tied back to the run that measured it.",
+          "type": "string"
+        },
+        "matchedRows": {
+          "description": "…of which this many matched a target row. The numerator.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "method": {
+          "description": "How it was measured.",
+          "oneOf": [
+            {
+              "description": "Count source rows whose (normalized) key matches a target key, over source rows with a non-null key.",
+              "type": "string",
+              "const": "join_match_scan"
+            }
+          ]
+        },
+        "methodVersion": {
+          "description": "That method's version.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "minSupport": {
+          "description": "The threshold this measurement was judged against, carried WITH the evidence. A ratio without the bar it cleared is not a claim.",
+          "type": "number",
+          "format": "double"
+        },
+        "sampling": {
+          "description": "The sample the counts were taken over.",
+          "$ref": "#/$defs/sampling"
+        },
+        "sourceNonNull": {
+          "description": "…of which this many have a non-null join key. THE DENOMINATOR: a null key is not a failed match, it is no reference at all.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sourceRows": {
+          "description": "Rows in the source relation the measurement covered.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "targetDistinct": {
+          "description": "…DISTINCT non-null keys. Equal to `target_non_null` exactly when the key identifies at most one target row, which is what a relationship into an entity requires.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "targetNonNull": {
+          "description": "…with a non-null key.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "targetRows": {
+          "description": "Rows in the target relation the measurement covered.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "relationship_proposal": {
+      "description": "One immutable revision of a relationship proposal (v0.5). Every id it references MUST resolve inside the same file (SPEC.md §5.3).",
       "type": "object",
       "required": [
         "kind",
         "data"
       ],
       "properties": {
-        "kind": {
-          "const": "vector"
-        },
         "data": {
+          "description": "One immutable revision of a relationship proposal (v0.5): what a reconnaissance run proposed about a source, the measurement behind it, the probes that took it, and where it stands. `status` is a flattened tag: `quarantined_hypothesis` and `refuted` carry `reason`, `promoted_by_reviewer` carries `receipt`, `supported` carries neither — and a `supported` proposal's own measurement MUST clear its own `minSupport` (SPEC.md §5.3). Every id it references MUST resolve inside the same file, and a previous revision MUST precede its successor. Recording a proposal never publishes it into a mapping.",
           "type": "object",
           "required": [
-            "recordType",
-            "recordId",
-            "label",
-            "field",
-            "vector"
+            "id",
+            "proposalId",
+            "tenantId",
+            "projectId",
+            "origin",
+            "relation",
+            "support",
+            "proposedAt"
           ],
           "properties": {
-            "recordType": {
-              "type": "string"
+            "author": {
+              "description": "Who authored this revision, when known. Advisory — it is never what makes a promotion trusted; the receipt is.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/author_stamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
-            "recordId": {
-              "type": "string"
-            },
-            "label": {
-              "type": "string"
-            },
-            "field": {
-              "type": "string"
-            },
-            "vector": {
+            "findings": {
+              "description": "The findings the proposal was drawn from: evidence records holding what the loop saw. Referenced, so they travel with it.",
               "type": "array",
               "items": {
-                "type": "number"
+                "description": "Evidence identifier (newtype over String). Distinct from VertexId because evidence lives in its own storage plane.",
+                "type": "string"
               }
             },
-            "textPreview": {
+            "id": {
+              "description": "This revision's id. Unique per record; never rewritten.",
+              "type": "string"
+            },
+            "metadata": {
+              "description": "Producer-specific extras. Free-form, never interpreted here."
+            },
+            "origin": {
+              "description": "The run, the loop version and the source manifest it read.",
+              "$ref": "#/$defs/proposal_origin"
+            },
+            "previousRevisionId": {
+              "description": "The revision this one supersedes; `None` for the first.",
               "type": [
                 "string",
                 "null"
               ]
             },
-            "evidenceIds": {
+            "probes": {
+              "description": "The SQL probes that measured it.",
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/$defs/probe_ref"
+              }
+            },
+            "projectId": {
+              "description": "Owning project.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "proposalId": {
+              "description": "The stable proposal id every revision shares.",
+              "type": "string"
+            },
+            "proposedAt": {
+              "description": "When this revision was authored.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "relation": {
+              "description": "What is being proposed.",
+              "$ref": "#/$defs/proposed_relation"
+            },
+            "support": {
+              "description": "What was measured.",
+              "$ref": "#/$defs/relation_support"
+            },
+            "tenantId": {
+              "description": "Owning tenant.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": true,
+          "oneOf": [
+            {
+              "description": "Measured and held back: the measurement did not clear its own declared threshold. Not a failure to record — a finding.",
+              "type": "object",
+              "required": [
+                "status",
+                "reason"
+              ],
+              "properties": {
+                "reason": {
+                  "description": "Why it is held back, in one line.",
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "const": "quarantined_hypothesis"
+                }
+              },
+              "additionalProperties": true
+            },
+            {
+              "description": "The measurement clears its declared threshold on its own.",
+              "type": "object",
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "const": "supported"
+                }
+              },
+              "additionalProperties": true
+            },
+            {
+              "description": "A reviewer promoted it, on the record. The support need not clear the bar — promoting one that does is the whole point.",
+              "type": "object",
+              "required": [
+                "status",
+                "receipt"
+              ],
+              "properties": {
+                "receipt": {
+                  "description": "Who decided, when, why, and the receipt.",
+                  "$ref": "#/$defs/reviewer_receipt"
+                },
+                "status": {
+                  "type": "string",
+                  "const": "promoted_by_reviewer"
+                }
+              },
+              "additionalProperties": true
+            },
+            {
+              "description": "The evidence killed it.",
+              "type": "object",
+              "required": [
+                "status",
+                "reason"
+              ],
+              "properties": {
+                "reason": {
+                  "description": "Why, in one line.",
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "const": "refuted"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "const": "relationship_proposal"
+        }
+      },
+      "additionalProperties": true
+    },
+    "reviewer_receipt": {
+      "description": "Who promoted a proposal, when, why, and the receipt that records it. Every field is required. A promotion with no named reviewer is an anonymous decision to materialize edges the measurement did not support, and the receipt is an evidence record so that the decision travels with the proposal and is closure-checked like any other reference.",
+      "type": "object",
+      "required": [
+        "reviewer",
+        "decidedAt",
+        "reason",
+        "receipt"
+      ],
+      "properties": {
+        "decidedAt": {
+          "description": "When they decided.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "description": "Why, in their words.",
+          "type": "string"
+        },
+        "receipt": {
+          "description": "The evidence record holding the receipt.",
+          "type": "string"
+        },
+        "reviewer": {
+          "description": "The reviewer's principal key.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "sampling": {
+      "description": "The sample a measurement was taken over, described well enough to be taken again. The presence rules per method are the rule, not decoration: a sampled measurement nobody can take again is not evidence, and a full scan has no sample to describe.",
+      "type": "object",
+      "required": [
+        "method"
+      ],
+      "properties": {
+        "cap": {
+          "description": "Row cap, for `capped_prefix`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "method": {
+          "description": "How rows were chosen.",
+          "oneOf": [
+            {
+              "description": "Every row was read. `percent`, `seed` and `cap` must be absent.",
+              "type": "string",
+              "const": "full_scan"
+            },
+            {
+              "description": "PostgreSQL `TABLESAMPLE SYSTEM (percent) REPEATABLE (seed)`.",
+              "type": "string",
+              "const": "system_repeatable"
+            },
+            {
+              "description": "`TABLESAMPLE BERNOULLI (percent) REPEATABLE (seed)`.",
+              "type": "string",
+              "const": "bernoulli_repeatable"
+            },
+            {
+              "description": "A bounded prefix: `LIMIT cap` under a deterministic order.",
+              "type": "string",
+              "const": "capped_prefix"
+            }
+          ]
+        },
+        "percent": {
+          "description": "Sampled percentage, when the method takes one.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "seed": {
+          "description": "Seed, so the same sample can be taken again. A sampled measurement without one cannot be re-derived, and is refused.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "method"
+            ],
+            "properties": {
+              "method": {
+                "const": "full_scan"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cap": false,
+              "percent": false,
+              "seed": false
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "method"
+            ],
+            "properties": {
+              "method": {
+                "enum": [
+                  "system_repeatable",
+                  "bernoulli_repeatable"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "percent",
+              "seed"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "method"
+            ],
+            "properties": {
+              "method": {
+                "const": "capped_prefix"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "cap"
+            ]
+          }
+        }
+      ]
+    },
+    "schema_type": {
+      "description": "A schema type declaration.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "One declared type: kind, qualified name, properties, relations. This is the payload of a `schema_type` record in a `.ant` file.",
+          "type": "object",
+          "required": [
+            "kind",
+            "name",
+            "properties",
+            "relations"
+          ],
+          "properties": {
+            "properties": {
+              "description": "Property declarations.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/property_def"
+              }
+            },
+            "kind": {
+              "description": "What kind of OpenSPG type this is.",
+              "oneOf": [
+                {
+                  "description": "Built-in scalar type (Text, Integer, Float...).",
+                  "type": "string",
+                  "const": "BASIC_TYPE"
+                },
+                {
+                  "description": "Reusable constrained value type (e.g. a phone number).",
+                  "type": "string",
+                  "const": "STANDARD_TYPE"
+                },
+                {
+                  "description": "Entity: a thing with identity and properties.",
+                  "type": "string",
+                  "const": "ENTITY_TYPE"
+                },
+                {
+                  "description": "Index type in the OpenSPG sense.",
+                  "type": "string",
+                  "const": "INDEX_TYPE"
+                },
+                {
+                  "description": "Concept: a taxonomy/category node.",
+                  "type": "string",
+                  "const": "CONCEPT_TYPE"
+                },
+                {
+                  "description": "Event: something that happened, usually with participants.",
+                  "type": "string",
+                  "const": "EVENT_TYPE"
+                }
+              ]
+            },
+            "name": {
+              "description": "Namespace-qualified name, e.g. `Antares.Deal`.",
+              "type": "string"
+            },
+            "name_zh": {
+              "description": "Chinese display name if provided by marklang.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "relations": {
+              "description": "Relation (edge type) declarations.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/relation_def"
               }
             }
           },
           "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "schema_type"
+        }
+      },
+      "additionalProperties": true
+    },
+    "source_dependency": {
+      "description": "How a piece of material relates to the sources already in play. A forwarded copy of a source is NOT an independent witness to it; counting it as one is how two sources become \"confirmed by three\".",
+      "oneOf": [
+        {
+          "description": "Its own witness.",
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "independent"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "A forwarded copy of another evidence record.",
+          "type": "object",
+          "required": [
+            "kind",
+            "of"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "forwardedCopy"
+            },
+            "of": {
+              "description": "The evidence it copies.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Derived from another evidence record (a summary, an extraction).",
+          "type": "object",
+          "required": [
+            "kind",
+            "of"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "derived"
+            },
+            "of": {
+              "description": "The evidence it derives from.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "source_manifest_ref": {
+      "description": "The source the run read, pinned by hash. A proposal is a claim about one shape of one source at one moment; without the manifest it was measured against, a later reader cannot tell whether the source has moved underneath it.",
+      "type": "object",
+      "required": [
+        "connection",
+        "planHash"
+      ],
+      "properties": {
+        "catalogHash": {
+          "description": "The catalog content hash the plan was built from: what the SOURCE looked like.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connection": {
+          "description": "The connection namespace the source is catalogued under.",
+          "type": "string"
+        },
+        "planHash": {
+          "description": "The execution plan the run was pinned to (`planHash`). What the run was permitted to read, frozen.",
+          "type": "string"
+        },
+        "policyHash": {
+          "description": "That policy's hash.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policyVersion": {
+          "description": "The security policy version the plan was made under.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "source_pointer": {
+      "description": "A position inside an evidence record's content. Every field is optional so a pointer can name a character span, a byte span, a JSON path into structured content, or any combination.",
+      "type": "object",
+      "properties": {
+        "byteEnd": {
+          "description": "End byte (exclusive) of the span.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "byteStart": {
+          "description": "First byte (inclusive) of the span.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "charEnd": {
+          "description": "End character (exclusive) of the span.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "charStart": {
+          "description": "First character (inclusive) of the span.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "path": {
+          "description": "JSON pointer (RFC 6901) into structured content.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "tombstone": {
+      "description": "A deletion, carried so a re-import can propagate it. Import is otherwise additive: without this, deleting a vertex at the source and re-exporting leaves the deleted record alive at the destination forever, and the two stores silently diverge. # Which planes can be tombstoned Vertices and edges only. Those are the mutable graph planes — a vertex is a current-state record and deleting one is a normal operation. Observations are append-only by design: an observation is a claim that something was seen at a time, and un-saying it would break the audit trail the format exists to carry. Evidence and beliefs are likewise not tombstoned here — evidence is the justification other records cite (deleting it would strand them, and the closure checker would rightly call the file broken), and beliefs are derived state that a re-materialisation regenerates. If retraction is ever needed on those planes it should be a RETRACTION record carrying a reason, not a delete — a different feature with different semantics. # Conflict rules * Tombstone for an id that does not exist locally → **no-op**, not an error. Imports are meant to converge from any starting point, and a file may legitimately carry a deletion the destination never saw the creation of. * A live record NEWER than the tombstone → **the record wins, the delete is ignored**. `deleted_at` is compared against the live record's last-write time; a stale tombstone must not resurrect a deletion that a later write already undid. This is last-write-wins on the same clock the rest of the store already uses. * Ties (equal timestamps) → the **tombstone wins**, so a delete is not lost to clock granularity.",
+      "type": "object",
+      "required": [
+        "id",
+        "deletedAt"
+      ],
+      "properties": {
+        "author": {
+          "description": "Who deleted it, when the source knows. Advisory — carried for the audit trail, never used to decide the conflict.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/author_stamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deletedAt": {
+          "description": "When the deletion happened at the source. Drives the last-write-wins comparison above.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "id": {
+          "description": "Id of the deleted record, in its own plane's namespace.",
+          "type": "string"
         }
       },
       "additionalProperties": true
     },
     "trailer": {
+      "description": "The stream footer: per-kind counts and the integrity hash. Exactly one, last line.",
       "type": "object",
       "required": [
         "kind",
@@ -442,77 +2442,16 @@
         "sha256"
       ],
       "properties": {
+        "counts": {
+          "description": "Per-kind record tallies.",
+          "$ref": "#/$defs/counts"
+        },
         "kind": {
+          "type": "string",
           "const": "trailer"
         },
-        "counts": {
-          "type": "object",
-          "required": [
-            "schemaTypes",
-            "vertices",
-            "edges",
-            "observations",
-            "evidence",
-            "beliefs",
-            "vectors"
-          ],
-          "properties": {
-            "schemaTypes": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "vertices": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "edges": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "observations": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "evidence": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "beliefs": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "vectors": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "vertexTombstones": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "description": "Added in v0.2. Absent in a v0.1 trailer, where it means zero \u2014 readers MUST default it rather than reject the older file."
-            },
-            "edgeTombstones": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "description": "Added in v0.2. Absent in a v0.1 trailer, where it means zero \u2014 readers MUST default it rather than reject the older file."
-            },
-            "contradictionCases": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "description": "Added in v0.4. Absent in a trailer written before v0.4, where it means zero \u2014 readers MUST default it rather than reject the older file."
-            },
-            "relationshipProposals": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "description": "Added in v0.5. Absent in a trailer written before v0.5, where it means zero \u2014 readers MUST default it rather than reject the older file."
-            }
-          },
-          "additionalProperties": false
-        },
         "sha256": {
+          "description": "Hex sha256 over every preceding uncompressed line.",
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         }
@@ -538,668 +2477,287 @@
               "evidence",
               "belief",
               "vector",
-              "trailer",
               "vertex_tombstone",
               "edge_tombstone",
               "contradiction_case",
-              "relationship_proposal"
+              "relationship_proposal",
+              "trailer"
             ]
           }
         }
       },
       "additionalProperties": true
     },
-    "author_stamp": {
-      "description": "Advisory provenance. Carried when known; NEVER used to decide a conflict.",
-      "type": "object",
-      "required": [
-        "userId",
-        "subjectType",
-        "authoredAt"
-      ],
-      "properties": {
-        "userId": {
-          "type": "string"
-        },
-        "tokenId": {
-          "type": "string"
-        },
-        "subjectType": {
-          "type": "string",
-          "enum": [
-            "user",
-            "service",
-            "desktop"
-          ]
-        },
-        "authoredAt": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "additionalProperties": true
-    },
-    "vertex_tombstone": {
-      "description": "v0.2. A deleted vertex, carried so a re-import propagates the deletion instead of leaving the record alive at the destination forever. Only the vertex and edge planes may be tombstoned: observations are append-only, evidence is cited by other records, and beliefs are derived state.",
-      "type": "object",
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "vertex_tombstone"
-        },
-        "data": {
-          "type": "object",
-          "required": [
-            "id",
-            "deletedAt"
-          ],
-          "properties": {
-            "id": {
-              "type": "string",
-              "description": "Id of the deleted vertex, in its own plane's id space."
-            },
-            "deletedAt": {
-              "type": "string",
-              "format": "date-time",
-              "description": "When the deletion happened AT THE SOURCE."
-            },
-            "author": {
-              "$ref": "#/$defs/author_stamp"
-            }
-          },
-          "additionalProperties": true
-        }
-      },
-      "additionalProperties": true
-    },
-    "edge_tombstone": {
-      "description": "v0.2. A deleted edge, carried so a re-import propagates the deletion instead of leaving the record alive at the destination forever. Only the vertex and edge planes may be tombstoned: observations are append-only, evidence is cited by other records, and beliefs are derived state.",
-      "type": "object",
-      "required": [
-        "kind",
-        "data"
-      ],
-      "properties": {
-        "kind": {
-          "const": "edge_tombstone"
-        },
-        "data": {
-          "type": "object",
-          "required": [
-            "id",
-            "deletedAt"
-          ],
-          "properties": {
-            "id": {
-              "type": "string",
-              "description": "Id of the deleted edge, in its own plane's id space."
-            },
-            "deletedAt": {
-              "type": "string",
-              "format": "date-time",
-              "description": "When the deletion happened AT THE SOURCE."
-            },
-            "author": {
-              "$ref": "#/$defs/author_stamp"
-            }
-          },
-          "additionalProperties": true
-        }
-      },
-      "additionalProperties": true
-    },
-    "source_pointer": {
-      "description": "v0.4. A position inside an evidence record: character span, byte span, JSON pointer path, or any combination.",
-      "type": "object",
-      "properties": {
-        "charStart": { "type": "integer", "minimum": 0 },
-        "charEnd": { "type": "integer", "minimum": 0 },
-        "byteStart": { "type": "integer", "minimum": 0 },
-        "byteEnd": { "type": "integer", "minimum": 0 },
-        "path": { "type": "string" }
-      },
-      "additionalProperties": true
-    },
-    "claim_ref": {
-      "description": "v0.4. One exact claim revision a case compares. `version` pins a belief version; `pointer` locates an evidence claim.",
-      "type": "object",
-      "required": ["kind", "id"],
-      "properties": {
-        "kind": { "type": "string", "enum": ["belief", "observation", "evidence"] },
-        "id": { "type": "string" },
-        "version": { "type": "integer", "minimum": 0 },
-        "pointer": { "$ref": "#/$defs/source_pointer" }
-      },
-      "additionalProperties": true
-    },
-    "evidence_ref": {
-      "description": "v0.4. A source position the case relies on.",
-      "type": "object",
-      "required": ["evidenceId"],
-      "properties": {
-        "evidenceId": { "type": "string" },
-        "pointer": { "$ref": "#/$defs/source_pointer" }
-      },
-      "additionalProperties": true
-    },
-    "material": {
-      "description": "v0.4. Supporting or refuting material with its source dependency: a forwarded copy or a derivation is not an independent witness of the source it names in `of`.",
-      "type": "object",
-      "required": ["evidenceId", "dependency"],
-      "properties": {
-        "evidenceId": { "type": "string" },
-        "pointer": { "$ref": "#/$defs/source_pointer" },
-        "dependency": {
-          "type": "object",
-          "required": ["kind"],
-          "properties": {
-            "kind": { "type": "string", "enum": ["independent", "forwardedCopy", "derived"] },
-            "of": { "type": "string" }
-          },
-          "additionalProperties": true
-        }
-      },
-      "additionalProperties": true
-    },
-    "contradiction_case": {
-      "description": "v0.4. One immutable revision of a contradiction case: two or more exact claim revisions compared, with epistemic, business-impact and workflow state kept separate. Payload is camelCase. Every id it references MUST resolve inside the same file, and a previous revision MUST precede its successor (SPEC.md §5.2).",
-      "type": "object",
-      "required": ["kind", "data"],
-      "properties": {
-        "kind": { "const": "contradiction_case" },
-        "data": {
-          "type": "object",
-          "required": [
-            "id", "caseId", "tenantId", "projectId", "family", "claims",
-            "comparator", "epistemic", "impact", "workflow", "revisedAt"
-          ],
-          "properties": {
-            "id": { "type": "string" },
-            "caseId": { "type": "string" },
-            "previousRevisionId": { "type": "string" },
-            "tenantId": { "type": "integer" },
-            "projectId": { "type": "integer" },
-            "family": { "type": "string" },
-            "claims": {
-              "type": "array",
-              "minItems": 2,
-              "items": { "$ref": "#/$defs/claim_ref" }
-            },
-            "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence_ref" } },
-            "measurements": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": ["name", "value"],
-                "properties": {
-                  "name": { "type": "string" },
-                  "value": {},
-                  "unit": { "type": "string" },
-                  "evidenceId": { "type": "string" },
-                  "pointer": { "$ref": "#/$defs/source_pointer" }
-                },
-                "additionalProperties": true
-              }
-            },
-            "comparator": {
-              "type": "object",
-              "required": ["comparator", "comparatorVersion"],
-              "properties": {
-                "comparator": { "type": "string" },
-                "comparatorVersion": { "type": "string" },
-                "ruleId": { "type": "string" },
-                "ruleVersion": { "type": "string" },
-                "model": { "type": "string" },
-                "modelVersion": { "type": "string" },
-                "snapshotId": { "type": "string" }
-              },
-              "additionalProperties": true
-            },
-            "supporting": { "type": "array", "items": { "$ref": "#/$defs/material" } },
-            "refuting": { "type": "array", "items": { "$ref": "#/$defs/material" } },
-            "vaultOccurrences": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": ["vaultId", "itemId"],
-                "properties": {
-                  "vaultId": { "type": "string" },
-                  "itemId": { "type": "string" },
-                  "revision": { "type": "string" },
-                  "pointer": { "$ref": "#/$defs/source_pointer" },
-                  "conditions": { "type": "array", "items": { "type": "string" } }
-                },
-                "additionalProperties": true
-              }
-            },
-            "epistemic": {
-              "type": "string",
-              "enum": ["incompatible", "compatible", "uncertain", "insufficiently_comparable"]
-            },
-            "impact": { "type": "string", "enum": ["harmful", "alignment_only", "unassessed"] },
-            "workflow": {
-              "type": "string",
-              "enum": ["open", "awaiting_clarification", "awaiting_review", "contested", "deferred", "settled", "reopened"]
-            },
-            "proposalId": { "type": "string" },
-            "reviewReceipts": { "type": "array", "items": { "type": "string" } },
-            "revisedAt": { "type": "string", "format": "date-time" },
-            "author": { "$ref": "#/$defs/author_stamp" },
-            "metadata": {}
-          },
-          "additionalProperties": true
-        }
-      },
-      "additionalProperties": true
-    },
-    "propertyValue": {
-      "title": "PropertyValue",
-      "description": "A typed property value. The five bare JSON forms are the original v0.2 encoding and are unchanged. The tagged envelopes were added in v0.3 to carry the SQL types, which are otherwise indistinguishable from strings. An object is an envelope ONLY when it has exactly the keys `$ant` and `v` and `$ant` names a known type; any other object is an ordinary JSON document value.",
+    "value_type": {
+      "description": "Declared value type of a property. The names accepted on the wire are wider than the variants (see [`ValueType::from_object_type_name`]); the variants are the canonical set.",
       "oneOf": [
         {
-          "type": "null"
-        },
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "number",
-          "description": "BIGINT or DOUBLE PRECISION."
-        },
-        {
+          "description": "Free-form text.",
           "type": "string",
-          "description": "TEXT."
+          "const": "Text"
         },
         {
-          "$ref": "#/$defs/propertyEnvelope"
+          "description": "64-bit integer (SQL BIGINT). Wire names \"Integer\"/\"Long\" keep mapping here for backward compatibility with existing schemas.",
+          "type": "string",
+          "const": "Long"
         },
         {
+          "description": "64-bit float (SQL DOUBLE PRECISION / FLOAT8).",
+          "type": "string",
+          "const": "Float"
+        },
+        {
+          "description": "Calendar date (SQL DATE). Values validate + normalize to `YYYY-MM-DD`; invalid input coerces to Null.",
+          "type": "string",
+          "const": "Date"
+        },
+        {
+          "description": "Boolean.",
+          "type": "string",
+          "const": "Bool"
+        },
+        {
+          "description": "SQL SMALLINT: range-checked to i16 on ingress, stored as Long.",
+          "type": "string",
+          "const": "SmallInt"
+        },
+        {
+          "description": "SQL INT/INTEGER (32-bit): range-checked to i32, stored as Long. Wire name \"Int32\"/\"Int\" (plain \"Integer\" stays Long, see above).",
+          "type": "string",
+          "const": "Int32"
+        },
+        {
+          "description": "SQL DECIMAL/NUMERIC. Values coerce to [`crate::Decimal`] — i128 unscaled digits plus a scale, exact, never `f64`. UNPARAMETERIZED, deliberately. The declared `(precision, scale)` stays in the source-schema mapping rather than here, because the value already carries its own exact scale and reports its own precision, which is enough for storage, comparison and round-tripping. Adding them here would change the serde shape of this variant from the string `\"Decimal\"` to a struct, and every stored schema record and `.ant` schema_type payload is written in the current shape. REVISIT WHEN: the SQL auto-mapper needs to VALIDATE values against declared column types — rejecting a scale-6 value written into a `DECIMAL(10,4)` column, rather than storing it at whatever scale it arrived with. That check cannot be made from the value alone; it needs the declaration, and at that point the declaration has to live here. Doing it will need a backward-compatible deserializer that still accepts the bare `\"Decimal\"` string.",
+          "type": "string",
+          "const": "Decimal"
+        },
+        {
+          "description": "SQL TIME: normalized `HH:MM:SS.ffffff` (fixed 6-digit fraction so lexicographic order == chronological order).",
+          "type": "string",
+          "const": "Time"
+        },
+        {
+          "description": "SQL TIMESTAMP/TIMESTAMPTZ: normalized UTC RFC3339 with fixed 6-digit fraction (`YYYY-MM-DDTHH:MM:SS.ffffffZ`) so lexicographic order == chronological order. Offset-less input is taken as UTC.",
+          "type": "string",
+          "const": "Timestamp"
+        },
+        {
+          "description": "UUID/UNIQUEIDENTIFIER: validated 8-4-4-4-12 hex, lowercased.",
+          "type": "string",
+          "const": "Uuid"
+        },
+        {
+          "description": "BLOB/BYTEA/VARBINARY: base64 text, charset/padding validated.",
+          "type": "string",
+          "const": "Bytes"
+        },
+        {
+          "description": "JSON/JSONB, document-store subdocuments: stored as real JSON (PropertyValue::Json), not stringified.",
+          "type": "string",
+          "const": "Json"
+        },
+        {
+          "description": "Typed array (Postgres arrays, document-store arrays): every element coerced against the inner type; stored as a JSON array.",
           "type": "object",
-          "description": "JSON/JSONB document value. Excludes the envelope shape so exactly one arm matches: an object that IS a well-formed envelope is the typed value, not a document.",
-          "not": {
-            "$ref": "#/$defs/propertyEnvelope"
-          }
-        },
-        {
-          "type": "array",
-          "description": "Untyped JSON array."
-        }
-      ]
-    },
-    "propertyEnvelope": {
-      "title": "PropertyEnvelope",
-      "description": "A v0.3 tagged value carrying a SQL type.",
-      "oneOf": [
-        {
-          "type": "object",
-          "description": "DECIMAL/NUMERIC. A canonical decimal STRING, never a JSON number: a JSON number is parsed as an IEEE double by most implementations, which silently rounds money past ~15 significant digits. Trailing fraction zeros are significant (the declared scale).",
           "required": [
-            "$ant",
-            "v"
+            "Array"
           ],
-          "additionalProperties": false,
           "properties": {
-            "$ant": {
-              "const": "decimal"
-            },
-            "v": {
-              "type": "string",
-              "pattern": "^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?$"
+            "Array": {
+              "$ref": "#/$defs/value_type"
             }
-          }
-        },
-        {
-          "type": "object",
-          "description": "DATE, YYYY-MM-DD.",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "date"
-            },
-            "v": {
-              "type": "string",
-              "format": "date"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "description": "TIME, HH:MM:SS[.ffffff].",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "time"
-            },
-            "v": {
-              "type": "string",
-              "pattern": "^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "description": "TIMESTAMP WITH TIME ZONE, RFC3339. The UTC offset is PART OF THE VALUE and must be preserved verbatim; normalizing to Z loses it.",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "timestamp"
-            },
-            "v": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "description": "UUID.",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "uuid"
-            },
-            "v": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "description": "BLOB/BYTEA, base64 (standard alphabet, padded).",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "bytes"
-            },
-            "v": {
-              "type": "string",
-              "contentEncoding": "base64"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "description": "INT.",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "int32"
-            },
-            "v": {
-              "type": "integer",
-              "minimum": -2147483648,
-              "maximum": 2147483647
-            }
-          }
-        },
-        {
-          "type": "object",
-          "description": "SMALLINT.",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "int16"
-            },
-            "v": {
-              "type": "integer",
-              "minimum": -32768,
-              "maximum": 32767
-            }
-          }
-        },
-        {
-          "type": "object",
-          "description": "SQL array. Elements are themselves property values, so element types are preserved.",
-          "required": [
-            "$ant",
-            "v"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "$ant": {
-              "const": "array"
-            },
-            "v": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/propertyValue"
-              }
-            }
-          }
-        }
-      ]
-    },
-    "sampling": {
-      "description": "v0.5. The sample a measurement was taken over, described well enough to be taken again. The conditions below are the rule, not decoration: a sampled measurement nobody can take again is not evidence, and a full scan has no sample to describe.",
-      "type": "object",
-      "required": ["method"],
-      "properties": {
-        "method": {
-          "enum": ["full_scan", "system_repeatable", "bernoulli_repeatable", "capped_prefix"]
-        },
-        "percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
-        "seed": { "type": "integer" },
-        "cap": { "type": "integer", "minimum": 1 }
-      },
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": { "properties": { "method": { "const": "full_scan" } }, "required": ["method"] },
-          "then": { "properties": { "percent": false, "seed": false, "cap": false } }
-        },
-        {
-          "if": {
-            "properties": { "method": { "enum": ["system_repeatable", "bernoulli_repeatable"] } },
-            "required": ["method"]
           },
-          "then": { "required": ["percent", "seed"] }
+          "additionalProperties": false
         },
         {
-          "if": { "properties": { "method": { "const": "capped_prefix" } }, "required": ["method"] },
-          "then": { "required": ["cap"] }
-        }
-      ]
-    },
-    "relation_support": {
-      "description": "v0.5. The measurement behind a proposed relationship (the mapper's evidence contract): the denominator, the numerator, the target side's uniqueness, how it was sampled, a fingerprint tying it to the run, and the threshold it was judged against. A ratio without the bar it cleared is not a claim.",
-      "type": "object",
-      "required": [
-        "contractVersion", "method", "methodVersion", "sourceRows", "sourceNonNull",
-        "matchedRows", "targetRows", "targetNonNull", "targetDistinct", "sampling",
-        "fingerprint", "minSupport"
-      ],
-      "properties": {
-        "contractVersion": { "type": "integer", "minimum": 1 },
-        "method": { "enum": ["join_match_scan"] },
-        "methodVersion": { "type": "integer", "minimum": 0 },
-        "sourceRows": { "type": "integer", "minimum": 0 },
-        "sourceNonNull": { "type": "integer", "minimum": 0 },
-        "matchedRows": { "type": "integer", "minimum": 0 },
-        "targetRows": { "type": "integer", "minimum": 0 },
-        "targetNonNull": { "type": "integer", "minimum": 0 },
-        "targetDistinct": { "type": "integer", "minimum": 0 },
-        "sampling": { "$ref": "#/$defs/sampling" },
-        "fingerprint": { "type": "string", "minLength": 1 },
-        "minSupport": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
-      },
-      "additionalProperties": false
-    },
-    "normalization_op": {
-      "description": "v0.5. An executable operator with exact PostgreSQL semantics, applied to one side of a join before matching. A cast is the object form; the rest are strings.",
-      "oneOf": [
-        { "enum": ["trim", "lower", "trim_lower"] },
-        {
+          "description": "Reference to another declared type by name.",
           "type": "object",
-          "required": ["cast"],
+          "required": [
+            "Ref"
+          ],
           "properties": {
-            "cast": { "enum": ["text", "bigint", "numeric", "uuid", "date", "timestamptz"] }
+            "Ref": {
+              "description": "Namespace-qualified SPG type name, e.g. `Antares.Deal` or `Antares.Chunk`.",
+              "type": "string"
+            }
           },
           "additionalProperties": false
         }
       ]
     },
-    "normalization": {
-      "description": "v0.5. What is applied to the source key and what is applied to the target key. Two operators, not one: `target` defaults to `source`. The export RESOLVES the normalized source value among the normalized target keys; it never transforms a source string into a target id.",
-      "type": "object",
-      "required": ["source"],
-      "properties": {
-        "source": { "$ref": "#/$defs/normalization_op" },
-        "target": { "$ref": "#/$defs/normalization_op" }
-      },
-      "additionalProperties": false
-    },
-    "proposed_relation": {
-      "description": "v0.5. The relationship being proposed: which types, which relations, which columns, and what is applied to both sides before they are compared. The key column lists have the same length \u2014 a join compares one column to one column.",
+    "vault_occurrence": {
+      "description": "Where the compared claims occur in a vault, and under what conditions the occurrence applies. A reference: the vault item is not copied here.",
       "type": "object",
       "required": [
-        "subjectType", "predicate", "targetType", "sourceRelation",
-        "sourceKeyColumns", "targetRelation", "targetKeyColumns"
+        "vaultId",
+        "itemId"
       ],
       "properties": {
-        "subjectType": { "type": "string", "minLength": 1 },
-        "predicate": { "type": "string", "minLength": 1 },
-        "targetType": { "type": "string", "minLength": 1 },
-        "sourceRelation": { "type": "string", "minLength": 1 },
-        "sourceKeyColumns": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-        "targetRelation": { "type": "string", "minLength": 1 },
-        "targetKeyColumns": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-        "normalization": { "$ref": "#/$defs/normalization" }
+        "conditions": {
+          "description": "Conditions under which the occurrence applies (a jurisdiction, a date range, a product version), as the vault states them.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "itemId": {
+          "description": "The item inside it.",
+          "type": "string"
+        },
+        "pointer": {
+          "description": "Where inside the item.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/source_pointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "description": "The item revision, when the vault versions items.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vaultId": {
+          "description": "The vault.",
+          "type": "string"
+        }
       },
       "additionalProperties": true
     },
-    "source_manifest_ref": {
-      "description": "v0.5. The source the run read, pinned by hash. Without it a later reader cannot tell whether the source has moved under the proposal.",
+    "vector": {
+      "description": "An embedding document.",
       "type": "object",
-      "required": ["connection", "planHash"],
+      "required": [
+        "kind",
+        "data"
+      ],
       "properties": {
-        "connection": { "type": "string", "minLength": 1 },
-        "planHash": { "type": "string", "minLength": 1 },
-        "catalogHash": { "type": "string" },
-        "policyVersion": { "type": "integer", "minimum": 0 },
-        "policyHash": { "type": "string" }
-      },
-      "additionalProperties": true
-    },
-    "proposal_origin": {
-      "description": "v0.5. The run and the loop version that produced the proposal, and the source manifest it read. A model that suggested the join is recorded so its suggestions can be graded \u2014 the measurement is still what decides.",
-      "type": "object",
-      "required": ["runId", "reconVersion", "sourceManifest"],
-      "properties": {
-        "runId": { "type": "string", "minLength": 1 },
-        "reconVersion": { "type": "string", "minLength": 1 },
-        "sourceManifest": { "$ref": "#/$defs/source_manifest_ref" },
-        "model": { "type": "string" },
-        "modelVersion": { "type": "string" }
-      },
-      "additionalProperties": true
-    },
-    "probe_ref": {
-      "description": "v0.5. One SQL probe the loop ran, kept so the measurement can be re-derived rather than believed. `statement` is the statement AS EXECUTED, parameterized \u2014 never with customer values inlined. `evidenceId`, when present, MUST resolve inside the file.",
-      "type": "object",
-      "required": ["name", "statement", "dialect"],
-      "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "statement": { "type": "string", "minLength": 1 },
-        "dialect": { "type": "string", "minLength": 1 },
-        "ranAt": { "type": "string", "format": "date-time" },
-        "evidenceId": { "type": "string" }
-      },
-      "additionalProperties": true
-    },
-    "reviewer_receipt": {
-      "description": "v0.5. Who promoted a proposal, when, why, and the evidence record holding the receipt. Every field is required: an unattributed promotion is nobody's decision, and `receipt` MUST resolve inside the file.",
-      "type": "object",
-      "required": ["reviewer", "decidedAt", "reason", "receipt"],
-      "properties": {
-        "reviewer": { "type": "string", "minLength": 1 },
-        "decidedAt": { "type": "string", "format": "date-time" },
-        "reason": { "type": "string", "minLength": 1 },
-        "receipt": { "type": "string", "minLength": 1 }
-      },
-      "additionalProperties": true
-    },
-    "relationship_proposal": {
-      "description": "v0.5. One immutable revision of a relationship proposal: what a reconnaissance run proposed about a source, the measurement behind it, the probes that took it, and where it stands. Payload is camelCase. `status` is a flattened tag: `quarantined_hypothesis` and `refuted` carry `reason`, `promoted_by_reviewer` carries `receipt`, `supported` carries neither \u2014 and a `supported` proposal's own measurement MUST clear its own `minSupport` (SPEC.md \u00a75.3). Every id it references MUST resolve inside the same file, and a previous revision MUST precede its successor. Recording a proposal never publishes it into a mapping.",
-      "type": "object",
-      "required": ["kind", "data"],
-      "properties": {
-        "kind": { "const": "relationship_proposal" },
         "data": {
+          "description": "A vector document as exported (mirrors the vector store's doc).",
           "type": "object",
           "required": [
-            "id", "proposalId", "tenantId", "projectId", "origin", "relation",
-            "support", "status", "proposedAt"
+            "recordType",
+            "recordId",
+            "label",
+            "field",
+            "vector"
           ],
           "properties": {
-            "id": { "type": "string" },
-            "proposalId": { "type": "string" },
-            "previousRevisionId": { "type": "string" },
-            "tenantId": { "type": "integer" },
-            "projectId": { "type": "integer" },
-            "origin": { "$ref": "#/$defs/proposal_origin" },
-            "relation": { "$ref": "#/$defs/proposed_relation" },
-            "support": { "$ref": "#/$defs/relation_support" },
-            "status": {
-              "enum": ["quarantined_hypothesis", "supported", "promoted_by_reviewer", "refuted"]
+            "evidenceIds": {
+              "description": "Evidence ids backing the embedded content, when available.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
-            "reason": { "type": "string", "minLength": 1 },
-            "receipt": { "$ref": "#/$defs/reviewer_receipt" },
-            "findings": { "type": "array", "items": { "type": "string" } },
-            "probes": { "type": "array", "items": { "$ref": "#/$defs/probe_ref" } },
-            "proposedAt": { "type": "string", "format": "date-time" },
-            "author": { "$ref": "#/$defs/author_stamp" },
-            "metadata": { "type": "object" }
-          },
-          "allOf": [
-            {
-              "if": { "properties": { "status": { "const": "promoted_by_reviewer" } },
-                       "required": ["status"] },
-              "then": { "required": ["receipt"] }
+            "field": {
+              "description": "Which field of the record the embedding covers.",
+              "type": "string"
             },
-            {
-              "if": { "properties": { "status": { "const": "quarantined_hypothesis" } },
-                       "required": ["status"] },
-              "then": { "required": ["reason"] }
+            "label": {
+              "description": "Type label of the embedded record.",
+              "type": "string"
             },
-            {
-              "if": { "properties": { "status": { "const": "refuted" } },
-                       "required": ["status"] },
-              "then": { "required": ["reason"] }
+            "recordId": {
+              "description": "Id of the embedded record within that plane.",
+              "type": "string"
+            },
+            "recordType": {
+              "description": "Which plane the embedded record belongs to (e.g. \"vertex\").",
+              "type": "string"
+            },
+            "textPreview": {
+              "description": "Short preview of the embedded text, when available.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "vector": {
+              "description": "The embedding itself.",
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              }
             }
-          ],
+          },
           "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "vector"
+        }
+      },
+      "additionalProperties": true
+    },
+    "vertex": {
+      "description": "A graph vertex.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "A graph node: business id, display name, qualified type label, and typed properties. The payload of a `vertex` record.",
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "label",
+            "properties"
+          ],
+          "properties": {
+            "properties": {
+              "description": "Typed properties, keyed by property name.",
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/propertyValue"
+              }
+            },
+            "id": {
+              "description": "Business id, unique within the type (e.g. `deal_1`).",
+              "type": "string"
+            },
+            "label": {
+              "description": "Namespace-qualified, e.g. \"Antares.Deal\".",
+              "type": "string"
+            },
+            "name": {
+              "description": "Human-readable display name.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "vertex"
+        }
+      },
+      "additionalProperties": true
+    },
+    "vertex_tombstone": {
+      "description": "Deletion of a vertex (v0.2), carried so a re-import propagates the deletion instead of leaving the record alive at the destination forever. Cascades to its edges on import, exactly as a live delete does. Only the vertex and edge planes may be tombstoned: observations are append-only, evidence is cited by other records, and beliefs are derived state.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "The deletion.",
+          "$ref": "#/$defs/tombstone"
+        },
+        "kind": {
+          "type": "string",
+          "const": "vertex_tombstone"
         }
       },
       "additionalProperties": true

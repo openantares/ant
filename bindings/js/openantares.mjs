@@ -13,9 +13,11 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
 
+// ---- generated from the Rust types by gen_schema: format facts ----
 export const FORMAT_MAJOR = 0;
 export const FORMAT_MINOR = 5;
 export const FORMAT_VERSION = `${FORMAT_MAJOR}.${FORMAT_MINOR}`;
+// ---- end generated: format facts ----
 
 // ---------------------------------------------------------------------
 // Property values (v0.3)
@@ -68,6 +70,7 @@ export function encodeProperty(type, value) {
   return { $ant: type, v: value };
 }
 
+// ---- generated from the Rust types by gen_schema: kinds ----
 const DATA_KINDS = new Set([
   "schema_type",
   "vertex",
@@ -76,12 +79,9 @@ const DATA_KINDS = new Set([
   "evidence",
   "belief",
   "vector",
-  // v0.2
   "vertex_tombstone",
   "edge_tombstone",
-  // v0.4
   "contradiction_case",
-  // v0.5
   "relationship_proposal",
 ]);
 
@@ -99,16 +99,16 @@ const COUNT_KEYS = {
   relationship_proposal: "relationshipProposals",
 };
 
-// Trailer keys added after v0.1 (tombstones in v0.2, contradiction cases
-// in v0.4, relationship proposals in v0.5). Absent in an older trailer,
-// where they mean zero. Keys this binding does not know are ignored
-// (spec §7/§8): they count kinds it skipped.
+// Trailer keys added after the first version. Absent in an older
+// trailer, where they mean zero. Keys this binding does not know are
+// ignored (spec §7/§8): they count kinds it skipped.
 const LATER_COUNT_KEYS = [
   "vertexTombstones",
   "edgeTombstones",
   "contradictionCases",
   "relationshipProposals",
 ];
+// ---- end generated: kinds ----
 
 export class AntError extends Error {}
 
@@ -126,6 +126,7 @@ export function parseVersion(s) {
   return { major: Number(parts[0]), minor: Number(parts[1]) };
 }
 
+// ---- generated from the Rust types by gen_schema: counts ----
 function emptyCounts() {
   return {
     schemaTypes: 0,
@@ -141,6 +142,7 @@ function emptyCounts() {
     relationshipProposals: 0,
   };
 }
+// ---- end generated: counts ----
 
 function countsEqual(a, b) {
   // A v0.1 trailer omits the tombstone keys; they mean zero there, so

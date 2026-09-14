@@ -31,7 +31,7 @@ runner per implementation. Every implementation must:
 9. ignore trailer count keys it does not know — they count kinds it
    skipped — while defaulting later-version keys it does know to zero.
 
-Format version: **0.4**. [`../SPEC.md`](../SPEC.md) is normative. The
+Format version: **0.5**. [`../SPEC.md`](../SPEC.md) is normative. The
 format changelog records what changed at each bump and the order to
 apply it in; the spec supersedes it where they differ.
 

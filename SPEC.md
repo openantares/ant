@@ -1,16 +1,18 @@
 # OpenAntares `.ant` Format — Specification v0.5
 
-Status: normative for format version `0.3`. This document plus
+Status: normative for format version `0.5`. This document plus
 [`schema/ant.schema.json`](schema/ant.schema.json) are the source of
 truth for the container; every implementation (the Rust crate
 `antares-format`, the reference bindings under [`bindings/`](bindings/),
 and any third-party reader/writer) must pass the
 [conformance suite](conformance/) against them.
 
-Change notes for the two bumps that produced this version live in the
-format changelog (v0.2: version policy, tombstones, trailer/manifest
-additions; v0.3: typed property values). This spec supersedes the
-changelog; where they differ, this document and the golden files win.
+Change notes for the bumps that produced this version live in the
+format changelog and the per-version delta notes (v0.2: version policy,
+tombstones, trailer/manifest additions; v0.3: typed property values;
+v0.4: contradiction cases; v0.5: relationship proposals). This spec
+supersedes them; where they differ, this document and the golden files
+win.
 
 ## 1. Purpose
 

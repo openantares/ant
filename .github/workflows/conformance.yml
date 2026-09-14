@@ -24,9 +24,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      # zstandard is required; jsonschema is optional in the runner but
-      # pinned here so CI always exercises per-line schema validation
-      # rather than silently skipping it.
+      # zstandard and jsonschema are both required by the runner (a missing
+      # jsonschema is a failed check since format 0.5, not a skipped one), so
+      # per-line schema validation is always exercised here.
       - run: pip install zstandard jsonschema
       - run: python3 conformance/run_conformance.py
 

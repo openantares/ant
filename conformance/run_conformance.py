@@ -4,11 +4,13 @@
 Golden files are produced by the canonical Rust writer
 (`cargo run -p antares-format --example gen_conformance`); this runner
 proves the Python reference binding reads them byte-identically to the
-spec, that every line validates against schema/ant.schema.json (when
-`jsonschema` is installed), that negatives (tamper, truncation,
-post-trailer data, bad version) are rejected, and that the Python
-WRITER produces files the reader verifies (self round-trip).
+spec, that every line validates against schema/ant.schema.json
+(`jsonschema` is REQUIRED — a missing module is a failed check, not a
+skipped one), that negatives (tamper, truncation, post-trailer data,
+bad version) are rejected, and that the Python WRITER produces files
+the reader verifies (self round-trip).
 
+    pip install zstandard jsonschema
     python3 run_conformance.py
 """
 
@@ -72,12 +74,64 @@ def main() -> int:
         if "skippedKinds" in exp:
             check(f"{fname}: skipped kinds", s.skipped_kinds == exp["skippedKinds"],
                   f"got {s.skipped_kinds}")
+        # v0.5: same reasoning for `relationship_proposal`. Reporting
+        # the statuses AND the measurement proves the binding read the
+        # record rather than skipping it — and the measurement is the
+        # point: a quarantined hypothesis at 0/1914 is what a grader
+        # had nothing to read before this kind existed.
+        if "proposalStatuses" in exp:
+            recs = [
+                r for r in AntReader(path.read_bytes())
+                if r["kind"] == "relationship_proposal"
+            ]
+            got = [r["data"]["status"] for r in recs]
+            check(f"{fname}: proposal statuses", got == exp["proposalStatuses"], f"got {got}")
+            if "proposalMatched" in exp:
+                got = [r["data"]["support"]["matchedRows"] for r in recs]
+                check(f"{fname}: proposal matched rows", got == exp["proposalMatched"],
+                      f"got {got}")
+            if "proposalNonNull" in exp:
+                got = [r["data"]["support"]["sourceNonNull"] for r in recs]
+                check(f"{fname}: proposal non-null denominators",
+                      got == exp["proposalNonNull"], f"got {got}")
+            # A promotion carries its receipt, and the receipt is a
+            # record in the same file: closure, from the binding's side.
+            ev = {
+                r["data"]["id"] for r in AntReader(path.read_bytes())
+                if r["kind"] == "evidence"
+            }
+            promoted = [r for r in recs if r["data"]["status"] == "promoted_by_reviewer"]
+            check(f"{fname}: promotions carry a receipt present in the file",
+                  all(p["data"]["receipt"]["receipt"] in ev for p in promoted),
+                  f"receipts {[p['data']['receipt']['receipt'] for p in promoted]} vs {sorted(ev)}")
+            check(f"{fname}: findings and probe results are present in the file",
+                  all(f in ev for r in recs for f in r["data"].get("findings", []))
+                  and all(
+                      pr.get("evidenceId") in ev
+                      for r in recs for pr in r["data"].get("probes", [])
+                      if pr.get("evidenceId") is not None
+                  ))
+
+        # v0.4: a binding that skipped `contradiction_case` as unknown
+        # still VERIFIES the file; reporting the states proves it read them.
+        if "epistemicStates" in exp or "workflowStates" in exp:
+            recs = [r for r in AntReader(path.read_bytes()) if r["kind"] == "contradiction_case"]
+            if "epistemicStates" in exp:
+                got = [r["data"]["epistemic"] for r in recs]
+                check(f"{fname}: epistemic states", got == exp["epistemicStates"], f"got {got}")
+            if "workflowStates" in exp:
+                got = [r["data"]["workflow"] for r in recs]
+                check(f"{fname}: workflow states", got == exp["workflowStates"], f"got {got}")
 
     print("== schema validation (every golden line) ==")
     try:
         import jsonschema
     except ImportError:
-        print("  SKIP  jsonschema not installed")
+        # A skipped check reads as a pass in a log nobody scrolls. This
+        # check was silently skipped everywhere `jsonschema` was absent
+        # — CI included — until it became a failure.
+        check("jsonschema importable (pip install jsonschema)", False,
+              "schema validation cannot run without it")
     else:
         schema = json.loads((HERE.parent / "schema" / "ant.schema.json").read_text())
         v = jsonschema.Draft202012Validator(schema)

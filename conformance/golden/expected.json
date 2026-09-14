@@ -2,10 +2,12 @@
   "basic.ant": {
     "counts": {
       "beliefs": 1,
+      "contradictionCases": 0,
       "edgeTombstones": 0,
       "edges": 1,
       "evidence": 1,
       "observations": 1,
+      "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 1,
       "vertexTombstones": 0,
@@ -23,15 +25,69 @@
       "vector"
     ],
     "tenantId": 1,
-    "version": "0.3"
+    "version": "0.5"
+  },
+  "contradiction_cases.ant": {
+    "counts": {
+      "beliefs": 1,
+      "contradictionCases": 4,
+      "edgeTombstones": 0,
+      "edges": 0,
+      "evidence": 8,
+      "observations": 4,
+      "relationshipProposals": 0,
+      "schemaTypes": 0,
+      "vectors": 0,
+      "vertexTombstones": 0,
+      "vertices": 2
+    },
+    "epistemicStates": [
+      "incompatible",
+      "insufficiently_comparable",
+      "incompatible",
+      "compatible"
+    ],
+    "firstVertexId": "co_1",
+    "projectId": 1,
+    "recordKinds": [
+      "vertex",
+      "vertex",
+      "evidence",
+      "evidence",
+      "evidence",
+      "evidence",
+      "evidence",
+      "evidence",
+      "evidence",
+      "evidence",
+      "observation",
+      "observation",
+      "observation",
+      "observation",
+      "belief",
+      "contradiction_case",
+      "contradiction_case",
+      "contradiction_case",
+      "contradiction_case"
+    ],
+    "tenantId": 1,
+    "version": "0.5",
+    "workflowStates": [
+      "awaiting_review",
+      "settled",
+      "open",
+      "settled"
+    ]
   },
   "forward_compat.ant": {
     "counts": {
       "beliefs": 0,
+      "contradictionCases": 0,
       "edgeTombstones": 0,
       "edges": 0,
       "evidence": 0,
       "observations": 0,
+      "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 0,
       "vertexTombstones": 0,
@@ -45,15 +101,60 @@
       "hologram"
     ],
     "tenantId": 1,
-    "version": "0.3"
+    "version": "0.5"
+  },
+  "relationship_proposals.ant": {
+    "counts": {
+      "beliefs": 0,
+      "contradictionCases": 0,
+      "edgeTombstones": 0,
+      "edges": 0,
+      "evidence": 5,
+      "observations": 0,
+      "relationshipProposals": 3,
+      "schemaTypes": 0,
+      "vectors": 0,
+      "vertexTombstones": 0,
+      "vertices": 0
+    },
+    "projectId": 1,
+    "proposalMatched": [
+      890,
+      0,
+      890
+    ],
+    "proposalNonNull": [
+      900,
+      1914,
+      900
+    ],
+    "proposalStatuses": [
+      "supported",
+      "quarantined_hypothesis",
+      "promoted_by_reviewer"
+    ],
+    "recordKinds": [
+      "evidence",
+      "evidence",
+      "evidence",
+      "evidence",
+      "evidence",
+      "relationship_proposal",
+      "relationship_proposal",
+      "relationship_proposal"
+    ],
+    "tenantId": 1,
+    "version": "0.5"
   },
   "tombstones.ant": {
     "counts": {
       "beliefs": 0,
+      "contradictionCases": 0,
       "edgeTombstones": 1,
       "edges": 1,
       "evidence": 0,
       "observations": 0,
+      "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 0,
       "vertexTombstones": 1,
@@ -68,6 +169,6 @@
       "edge_tombstone"
     ],
     "tenantId": 1,
-    "version": "0.3"
+    "version": "0.5"
   }
 }

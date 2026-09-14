@@ -22,9 +22,16 @@ runner per implementation. Every implementation must:
 7. reject the synthesized negatives: tampered record bytes, missing
    trailer, chopped compressed stream, data after the trailer, wrong
    counts, a different MAJOR version, an unparsable version, non-zstd
-   input.
+   input,
+8. read `contradiction_cases.ant` (v0.4) and SURFACE every
+   `contradiction_case` record. A binding that skips the kind as
+   unknown still verifies the file, so `expected.json` pins the record
+   sequence and the epistemic and workflow states the binding reports
+   (`epistemicStates`, `workflowStates`),
+9. ignore trailer count keys it does not know — they count kinds it
+   skipped — while defaulting later-version keys it does know to zero.
 
-Format version: **0.3**. [`../SPEC.md`](../SPEC.md) is normative. The
+Format version: **0.4**. [`../SPEC.md`](../SPEC.md) is normative. The
 format changelog records what changed at each bump and the order to
 apply it in; the spec supersedes it where they differ.
 
@@ -54,11 +61,24 @@ Because the bump is additive, a v0.2 reader still reads a v0.3 file — it
 just sees the envelopes as plain objects, which is exactly what the
 "minor is ahead of this reader" signal is for.
 
+**v0.4 — contradiction cases.** A new record kind, `contradiction_case`:
+one immutable revision of a case comparing two or more exact claim
+revisions, with epistemic, business-impact and workflow state kept
+separate, carrying references (belief versions, observations, evidence
+positions, receipts, vault occurrences) and never copies. An archive
+holding a case must hold everything it references — a closure
+verifier refuses one that does not. The trailer gains
+`contradictionCases`; a reader MUST ignore count keys it does not know.
+The golden's two non-cases are the documented false-positive shapes (a
+model-invented shared subject; a withdrawal receipt) and are replaced
+by real corpus cases in a later release. See `../SPEC.md` §5.2 and
+[`deltas/ant-v0.4-delta.md`](../deltas/ant-v0.4-delta.md).
+
 The two runners in this repository, both of which you can run here:
 
 | implementation | runner | negatives | schema check |
 |----------------|--------|-----------|--------------|
-| Python | `python3 run_conformance.py` | yes (7) | yes, when `jsonschema` is installed |
+| Python | `python3 run_conformance.py` | yes (7) | yes — `jsonschema` required; its absence is a failed check |
 | JavaScript | `node run_conformance.mjs` | yes (7) | covered by the Python runner |
 
 The goldens themselves are written by `antares-format`, the canonical

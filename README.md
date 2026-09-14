@@ -7,7 +7,9 @@ cross-language conformance suite.
 ## Layout
 
 ```
-SPEC.md                       the normative format specification (v0.3)
+SPEC.md                       the normative format specification (v0.5)
+CHANGELOG.md                  what changed at each format bump, with a delta note each
+deltas/                       the per-bump delta notes (spec, schema, bindings)
 schema/ant.schema.json        JSON Schema for every record line (source of truth
                               for record shapes; SPEC.md owns container rules)
 bindings/python/openantares.py   reference reader + writer + validator (needs `zstandard`)
@@ -21,8 +23,8 @@ Both runners in this repository work against the golden files as
 checked in, with no other setup:
 
 ```sh
-# Python reference binding. `pip install zstandard`; `jsonschema` is
-# optional and adds per-line validation against schema/ant.schema.json.
+# Python reference binding. `pip install zstandard jsonschema` — the
+# per-line schema validation is a required check, not an optional one.
 python3 conformance/run_conformance.py
 
 # JavaScript reference binding. Node >= 22.15, which is where
@@ -48,7 +50,7 @@ so a diff in the golden bytes always means a deliberate format change.
 
 ## Versioning
 
-The container version lives in the manifest (`"version": "0.3"`) as
+The container version lives in the manifest (`"version": "0.5"`) as
 `MAJOR.MINOR`. Readers accept any MINOR at the same MAJOR and report
 when a file is ahead of them; a different MAJOR is rejected. Unknown
 record kinds and additive fields inside known kinds are

@@ -1,7 +1,7 @@
 """OpenAntares `.ant` reference binding for Python.
 
 Reader, writer, and validator for the OpenAntares container format
-(spec: ../../SPEC.md, format version 0.3). Requires the `zstandard`
+(spec: ../../SPEC.md, format version 0.5). Requires the `zstandard`
 package; nothing else beyond the standard library.
 
     from openantares import AntReader, AntWriter, validate, decode_property
@@ -31,7 +31,7 @@ except ImportError as e:  # pragma: no cover
     raise ImportError("openantares needs the `zstandard` package: pip install zstandard") from e
 
 FORMAT_MAJOR = 0
-FORMAT_MINOR = 3
+FORMAT_MINOR = 5
 FORMAT_VERSION = f"{FORMAT_MAJOR}.{FORMAT_MINOR}"
 
 DATA_KINDS = (
@@ -45,6 +45,10 @@ DATA_KINDS = (
     # v0.2
     "vertex_tombstone",
     "edge_tombstone",
+    # v0.4
+    "contradiction_case",
+    # v0.5
+    "relationship_proposal",
 )
 
 # trailer count key per kind (counts are camelCase per spec §5)
@@ -58,10 +62,19 @@ _COUNT_KEY = {
     "vector": "vectors",
     "vertex_tombstone": "vertexTombstones",
     "edge_tombstone": "edgeTombstones",
+    "contradiction_case": "contradictionCases",
+    "relationship_proposal": "relationshipProposals",
 }
 
-# v0.2 trailer keys. Absent in a v0.1 trailer, where they mean zero.
-_V02_COUNT_KEYS = ("vertexTombstones", "edgeTombstones")
+# Trailer keys added after v0.1 (tombstones in v0.2, contradiction cases
+# in v0.4, relationship proposals in v0.5). Absent in an older trailer,
+# where they mean zero.
+_LATER_COUNT_KEYS = (
+    "vertexTombstones",
+    "edgeTombstones",
+    "contradictionCases",
+    "relationshipProposals",
+)
 
 
 class AntError(Exception):
@@ -158,6 +171,8 @@ class Counts:
     vectors: int = 0
     vertex_tombstones: int = 0
     edge_tombstones: int = 0
+    contradiction_cases: int = 0
+    relationship_proposals: int = 0
 
     def as_trailer_dict(self) -> dict:
         return {
@@ -170,6 +185,8 @@ class Counts:
             "vectors": self.vectors,
             "vertexTombstones": self.vertex_tombstones,
             "edgeTombstones": self.edge_tombstones,
+            "contradictionCases": self.contradiction_cases,
+            "relationshipProposals": self.relationship_proposals,
         }
 
     def bump(self, kind: str) -> None:
@@ -183,6 +200,8 @@ class Counts:
             "vector": "vectors",
             "vertex_tombstone": "vertex_tombstones",
             "edge_tombstone": "edge_tombstones",
+            "contradiction_case": "contradiction_cases",
+            "relationship_proposal": "relationship_proposals",
         }[kind]
         setattr(self, attr, getattr(self, attr) + 1)
 
@@ -294,9 +313,14 @@ class AntReader:
                 # zero there, so default them before comparing rather
                 # than failing an older file for a field it predates.
                 trailer_counts = dict(rec.get("counts") or {})
-                for k in _V02_COUNT_KEYS:
+                for k in _LATER_COUNT_KEYS:
                     trailer_counts.setdefault(k, 0)
-                if trailer_counts != got:
+                # A NEWER minor may count kinds this binding skipped as
+                # unknown. Those keys are not ours to check (spec §7/§8):
+                # failing on them would make every additive kind a
+                # breaking change, which is what the v0.3 binding did.
+                known = {k: v for k, v in trailer_counts.items() if k in got}
+                if known != got:
                     raise AntError(
                         f"integrity: counts mismatch: trailer {trailer_counts}, read {got}"
                     )

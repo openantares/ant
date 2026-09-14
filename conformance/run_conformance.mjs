@@ -65,6 +65,75 @@ for (const [fname, exp] of Object.entries(expected)) {
       JSON.stringify(s.skippedKinds),
     );
   }
+  // v0.5: same reasoning for `relationship_proposal`. Reporting the
+  // statuses AND the measurement proves the binding read the record
+  // rather than skipping it — and the measurement is the point: a
+  // quarantined hypothesis at 0/1914 is what a grader had nothing to
+  // read before this kind existed.
+  if (exp.proposalStatuses) {
+    const recs = [];
+    const evidence = new Set();
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "relationship_proposal") recs.push(rec);
+      if (rec.kind === "evidence") evidence.add(rec.data.id);
+    }
+    const got = recs.map((r) => r.data.status);
+    check(
+      `${fname}: proposal statuses`,
+      JSON.stringify(got) === JSON.stringify(exp.proposalStatuses),
+      JSON.stringify(got),
+    );
+    if (exp.proposalMatched) {
+      const m = recs.map((r) => r.data.support.matchedRows);
+      check(
+        `${fname}: proposal matched rows`,
+        JSON.stringify(m) === JSON.stringify(exp.proposalMatched),
+        JSON.stringify(m),
+      );
+    }
+    if (exp.proposalNonNull) {
+      const d = recs.map((r) => r.data.support.sourceNonNull);
+      check(
+        `${fname}: proposal non-null denominators`,
+        JSON.stringify(d) === JSON.stringify(exp.proposalNonNull),
+        JSON.stringify(d),
+      );
+    }
+    // A promotion carries its receipt, and the receipt is a record in
+    // the same file: closure, from the binding's side.
+    const promoted = recs.filter((r) => r.data.status === "promoted_by_reviewer");
+    check(
+      `${fname}: promotions carry a receipt present in the file`,
+      promoted.every((p) => evidence.has(p.data.receipt.receipt)),
+      JSON.stringify(promoted.map((p) => p.data.receipt.receipt)),
+    );
+    check(
+      `${fname}: findings and probe results are present in the file`,
+      recs.every(
+        (r) =>
+          (r.data.findings ?? []).every((f) => evidence.has(f)) &&
+          (r.data.probes ?? [])
+            .filter((pr) => pr.evidenceId != null)
+            .every((pr) => evidence.has(pr.evidenceId)),
+      ),
+    );
+  }
+  // v0.4: a binding that skipped `contradiction_case` as unknown still
+  // VERIFIES the file; reporting the states proves it read them.
+  if (exp.epistemicStates || exp.workflowStates) {
+    const recs = [];
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "contradiction_case") recs.push(rec);
+    }
+    if (exp.epistemicStates) {
+      const got = recs.map((r) => r.data.epistemic);
+      check(`${fname}: epistemic states`, JSON.stringify(got) === JSON.stringify(exp.epistemicStates), JSON.stringify(got));
+    }
+    if (exp.workflowStates) {
+      const got = recs.map((r) => r.data.workflow);
+      check(`${fname}: workflow states`, JSON.stringify(got) === JSON.stringify(exp.workflowStates), JSON.stringify(got));
+    }
+  }
 }
 
 console.log("== negatives (synthesized from basic.ant) ==");

@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
 
 export const FORMAT_MAJOR = 0;
-export const FORMAT_MINOR = 3;
+export const FORMAT_MINOR = 5;
 export const FORMAT_VERSION = `${FORMAT_MAJOR}.${FORMAT_MINOR}`;
 
 // ---------------------------------------------------------------------
@@ -79,6 +79,10 @@ const DATA_KINDS = new Set([
   // v0.2
   "vertex_tombstone",
   "edge_tombstone",
+  // v0.4
+  "contradiction_case",
+  // v0.5
+  "relationship_proposal",
 ]);
 
 const COUNT_KEYS = {
@@ -91,10 +95,20 @@ const COUNT_KEYS = {
   vector: "vectors",
   vertex_tombstone: "vertexTombstones",
   edge_tombstone: "edgeTombstones",
+  contradiction_case: "contradictionCases",
+  relationship_proposal: "relationshipProposals",
 };
 
-// v0.2 trailer keys. Absent in a v0.1 trailer, where they mean zero.
-const V02_COUNT_KEYS = ["vertexTombstones", "edgeTombstones"];
+// Trailer keys added after v0.1 (tombstones in v0.2, contradiction cases
+// in v0.4, relationship proposals in v0.5). Absent in an older trailer,
+// where they mean zero. Keys this binding does not know are ignored
+// (spec §7/§8): they count kinds it skipped.
+const LATER_COUNT_KEYS = [
+  "vertexTombstones",
+  "edgeTombstones",
+  "contradictionCases",
+  "relationshipProposals",
+];
 
 export class AntError extends Error {}
 
@@ -123,6 +137,8 @@ function emptyCounts() {
     vectors: 0,
     vertexTombstones: 0,
     edgeTombstones: 0,
+    contradictionCases: 0,
+    relationshipProposals: 0,
   };
 }
 
@@ -131,7 +147,7 @@ function countsEqual(a, b) {
   // default them rather than failing an older file for a field it
   // predates.
   return Object.keys(emptyCounts()).every((k) => {
-    const fromTrailer = a?.[k] ?? (V02_COUNT_KEYS.includes(k) ? 0 : -1);
+    const fromTrailer = a?.[k] ?? (LATER_COUNT_KEYS.includes(k) ? 0 : -1);
     return fromTrailer === b[k];
   });
 }

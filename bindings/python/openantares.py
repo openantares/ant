@@ -1,7 +1,7 @@
 """OpenAntares `.ant` reference binding for Python.
 
 Reader, writer, and validator for the OpenAntares container format
-(spec: ../../SPEC.md, format version 0.5). Requires the `zstandard`
+(spec: ../../SPEC.md, format version 0.6). Requires the `zstandard`
 package; nothing else beyond the standard library.
 
     from openantares import AntReader, AntWriter, validate, decode_property
@@ -32,7 +32,7 @@ except ImportError as e:  # pragma: no cover
 
 # ---- generated from the Rust types by gen_schema: format facts ----
 FORMAT_MAJOR = 0
-FORMAT_MINOR = 5
+FORMAT_MINOR = 6
 FORMAT_VERSION = f"{FORMAT_MAJOR}.{FORMAT_MINOR}"
 
 DATA_KINDS = (

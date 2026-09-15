@@ -134,6 +134,41 @@ for (const [fname, exp] of Object.entries(expected)) {
       check(`${fname}: workflow states`, JSON.stringify(got) === JSON.stringify(exp.workflowStates), JSON.stringify(got));
     }
   }
+  // v0.6: explicitly-unknown observation time. A binding that could not
+  // read the additive wire form would misclassify these — so the check
+  // is on the DECODED state, not just the record count. `observedAt` /
+  // `extractedAt` are one of three disjoint shapes: a bare RFC3339
+  // string (Known, no basis), {known:{at,basis}}, or {unknown:{reason}}.
+  if (exp.observedTimeStates || exp.extractedTimeBases || exp.unknownReasons) {
+    const recs = [];
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "observation") recs.push(rec);
+    }
+    const timeState = (v) => {
+      if (typeof v === "string") return "known";
+      if (v && typeof v === "object") {
+        if ("known" in v) return "known";
+        if ("unknown" in v) return "unknown";
+      }
+      return "?";
+    };
+    const timeBasis = (v) =>
+      v && typeof v === "object" && "known" in v ? (v.known.basis ?? null) : null;
+    if (exp.observedTimeStates) {
+      const got = recs.map((r) => timeState(r.data.observed_at));
+      check(`${fname}: observed time states`, JSON.stringify(got) === JSON.stringify(exp.observedTimeStates), JSON.stringify(got));
+    }
+    if (exp.extractedTimeBases) {
+      const got = recs.map((r) => timeBasis(r.data.extracted_at));
+      check(`${fname}: extracted time bases`, JSON.stringify(got) === JSON.stringify(exp.extractedTimeBases), JSON.stringify(got));
+    }
+    if (exp.unknownReasons) {
+      const got = recs
+        .filter((r) => r.data.observed_at && typeof r.data.observed_at === "object" && "unknown" in r.data.observed_at)
+        .map((r) => r.data.observed_at.unknown.reason);
+      check(`${fname}: unknown reasons`, JSON.stringify(got) === JSON.stringify(exp.unknownReasons), JSON.stringify(got));
+    }
+  }
 }
 
 console.log("== negatives (synthesized from basic.ant) ==");

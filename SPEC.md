@@ -1,6 +1,6 @@
-# OpenAntares `.ant` Format — Specification v0.5
+# OpenAntares `.ant` Format — Specification v0.6
 
-Status: normative for format version `0.5`. This document plus
+Status: normative for format version `0.6`. This document plus
 [`schema/ant.schema.json`](schema/ant.schema.json) are the source of
 truth for the container; every implementation (the Rust crate
 `antares-format`, the reference bindings under [`bindings/`](bindings/),
@@ -10,9 +10,9 @@ and any third-party reader/writer) must pass the
 Change notes for the bumps that produced this version live in the
 format changelog and the per-version delta notes (v0.2: version policy,
 tombstones, trailer/manifest additions; v0.3: typed property values;
-v0.4: contradiction cases; v0.5: relationship proposals). This spec
-supersedes them; where they differ, this document and the golden files
-win.
+v0.4: contradiction cases; v0.5: relationship proposals; v0.6:
+explicitly-unknown observation time). This spec supersedes them; where
+they differ, this document and the golden files win.
 
 ## 1. Purpose
 
@@ -132,7 +132,7 @@ The JSON Schema in `schema/ant.schema.json` specifies the required
 fields per kind; **unknown fields inside `data` MUST be
 preserved-or-ignored, never an error** (additive evolution).
 
-Kinds defined as of v0.5:
+Kinds defined as of v0.6:
 
 | kind               | since | payload |
 |--------------------|-------|---------|
@@ -332,6 +332,51 @@ a promoted one — is a record of what was proposed and decided. Turning
 one into a mapping, materializing edges from it, is a separate act
 under whatever rules the consumer applies to mappings. Nothing in this
 kind authorizes it.
+
+### 5.4 Explicitly-unknown observation time (v0.6)
+
+An `observation` carries two times: `observed_at` (the EVENT time — when
+the underlying thing happened) and `extracted_at` (the PROVENANCE time —
+when an extractor produced the record). Through v0.5 both were required
+bare RFC3339 strings, so a genuinely dateless original could not be
+represented at all. In v0.6 each is an **event time** with three
+disjoint wire forms:
+
+```
+"observed_at": "2026-08-09T10:00:00Z"                         Known, no basis
+"observed_at": {"known":{"at":"2026-08-09T10:00:00Z",         Known, with a basis
+                         "basis":"source_record_time"}}
+"observed_at": {"unknown":{"reason":"no_source_time"}}         Unknown, the new state
+```
+
+- A bare RFC3339 string is a **Known** time with no recorded basis —
+  **byte-identical to v0.5**. This is why the bump is a MINOR, additive
+  one: every dated observation in every v0.5 file reads and re-exports
+  unchanged, and nothing re-encodes historical records.
+- `{"known":{"at",…,"basis":…}}` is a Known time whose `basis` records
+  how the instant was arrived at. `basis` is one of
+  `source_record_time`, `asserted_valid_from`, `source_field_binding`.
+  A producer MAY populate the PROVENANCE time (`extracted_at`) with a
+  basis drawn from an extraction receipt; nothing may fabricate an EVENT
+  time (`observed_at`) that the source did not carry.
+- `{"unknown":{"reason":…}}` is an explicitly-unknown time. `reason` is
+  one of `no_source_time`, `asserted_without_date`, `current_state_only`,
+  `ambiguous_source_time`, `implausible_source_time`. Unknown is **not
+  null and not a sentinel**: it carries a reason, and a reader MUST NOT
+  stand `epoch`, `now` or `0` in for it.
+
+A **time-aware reader** (a time window, a time-ordered index, a
+"most-recent" read) MUST treat an `unknown` time as being on **no
+timeline**: excluded from time windows and time-ordered results, never
+clamped to a bound. The observation remains fully present in the main
+plane, in unordered listings, in the archive, and in replay. The reason
+vocabulary is shared verbatim with the engine's process-mining
+`EventTime`; it is one dialect, not two.
+
+A v0.5 reader encountering a v0.6 file reads every observation whose
+times are bare strings exactly as before, and errors only on an
+observation that uses one of the two object forms — which is precisely
+the "the file is ahead of this reader" signal §3 describes.
 
 ## 6. Property values
 

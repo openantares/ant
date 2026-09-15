@@ -25,7 +25,7 @@
       "vector"
     ],
     "tenantId": 1,
-    "version": "0.5"
+    "version": "0.6"
   },
   "contradiction_cases.ant": {
     "counts": {
@@ -71,7 +71,7 @@
       "contradiction_case"
     ],
     "tenantId": 1,
-    "version": "0.5",
+    "version": "0.6",
     "workflowStates": [
       "awaiting_review",
       "settled",
@@ -101,7 +101,7 @@
       "hologram"
     ],
     "tenantId": 1,
-    "version": "0.5"
+    "version": "0.6"
   },
   "relationship_proposals.ant": {
     "counts": {
@@ -144,7 +144,7 @@
       "relationship_proposal"
     ],
     "tenantId": 1,
-    "version": "0.5"
+    "version": "0.6"
   },
   "tombstones.ant": {
     "counts": {
@@ -169,6 +169,39 @@
       "edge_tombstone"
     ],
     "tenantId": 1,
-    "version": "0.5"
+    "version": "0.6"
+  },
+  "unknown_time.ant": {
+    "counts": {
+      "beliefs": 0,
+      "contradictionCases": 0,
+      "edgeTombstones": 0,
+      "edges": 0,
+      "evidence": 0,
+      "observations": 2,
+      "relationshipProposals": 0,
+      "schemaTypes": 0,
+      "vectors": 0,
+      "vertexTombstones": 0,
+      "vertices": 0
+    },
+    "extractedTimeBases": [
+      "source_record_time",
+      null
+    ],
+    "observedTimeStates": [
+      "unknown",
+      "known"
+    ],
+    "projectId": 1,
+    "recordKinds": [
+      "observation",
+      "observation"
+    ],
+    "tenantId": 1,
+    "unknownReasons": [
+      "no_source_time"
+    ],
+    "version": "0.6"
   }
 }

@@ -123,6 +123,45 @@ def main() -> int:
                 got = [r["data"]["workflow"] for r in recs]
                 check(f"{fname}: workflow states", got == exp["workflowStates"], f"got {got}")
 
+        # v0.6: explicitly-unknown observation time. A binding that could
+        # not read the additive wire form would misclassify these — so
+        # the check is on the DECODED state, not just the record count.
+        # `observed_at`/`extracted_at` are one of three disjoint shapes:
+        # a bare RFC3339 string (Known, no basis), {"known":{at,basis}},
+        # or {"unknown":{reason}}.
+        def _time_state(v):
+            if isinstance(v, str):
+                return "known"
+            if isinstance(v, dict):
+                if "known" in v:
+                    return "known"
+                if "unknown" in v:
+                    return "unknown"
+            return "?"
+
+        def _time_basis(v):
+            if isinstance(v, dict) and "known" in v:
+                return v["known"].get("basis")
+            return None  # bare string is Known with no basis
+
+        if "observedTimeStates" in exp:
+            recs = [r for r in AntReader(path.read_bytes()) if r["kind"] == "observation"]
+            got = [_time_state(r["data"]["observed_at"]) for r in recs]
+            check(f"{fname}: observed time states", got == exp["observedTimeStates"],
+                  f"got {got}")
+        if "extractedTimeBases" in exp:
+            recs = [r for r in AntReader(path.read_bytes()) if r["kind"] == "observation"]
+            got = [_time_basis(r["data"]["extracted_at"]) for r in recs]
+            check(f"{fname}: extracted time bases", got == exp["extractedTimeBases"],
+                  f"got {got}")
+        if "unknownReasons" in exp:
+            recs = [r for r in AntReader(path.read_bytes()) if r["kind"] == "observation"]
+            got = [r["data"]["observed_at"]["unknown"]["reason"]
+                   for r in recs
+                   if isinstance(r["data"]["observed_at"], dict)
+                   and "unknown" in r["data"]["observed_at"]]
+            check(f"{fname}: unknown reasons", got == exp["unknownReasons"], f"got {got}")
+
     print("== schema validation (every golden line) ==")
     try:
         import jsonschema

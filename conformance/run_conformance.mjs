@@ -118,6 +118,62 @@ for (const [fname, exp] of Object.entries(expected)) {
       ),
     );
   }
+  // v0.7: prove the binding surfaced the immutable ontology envelope,
+  // not merely skipped a new kind while still verifying its bytes.
+  if (exp.ontologyRevisionIds) {
+    const recs = [];
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "ontology_revision") recs.push(rec.data);
+    }
+    const fields = {
+      ontologyRevisionIds: recs.map((r) => r.id),
+      ontologyTargetVaults: recs.map((r) => r.manifest.target.vaultId),
+      ontologyPreviousRevisionIds: recs.map((r) => r.conditional.previousRevisionId ?? null),
+      ontologySemanticKinds: recs.map((r) => r.manifest.semanticItems.map((item) => item.kind)),
+      ontologyConditionalDomains: recs.map((r) => r.conditional.revisionDomain),
+      ontologyConditionalChains: recs.map((r) => r.conditional.chainId),
+      ontologyPublisherPrincipals: recs.map((r) => r.publisher.principal),
+      ontologyApprovalAttesters: recs.map(
+        (r) => r.manifest.approval.attestation.attesterPrincipal,
+      ),
+      ontologyRetainedDispositions: recs.map(
+        (r) => r.manifest.retainedPositions.map((position) => position.disposition),
+      ),
+      ontologyAttributionPrincipals: recs.map(
+        (r) => r.manifest.attribution.map((item) => item.principal),
+      ),
+    };
+    for (const [key, got] of Object.entries(fields)) {
+      check(
+        `${fname}: ${key}`,
+        JSON.stringify(got) === JSON.stringify(exp[key]),
+        JSON.stringify(got),
+      );
+    }
+    const recordKey = (ref) => `${ref.kind}\0${ref.id}\0${ref.contentSha256}`;
+    const closureOk = recs.every((revision) => {
+      const manifest = revision.manifest;
+      const published = new Set(manifest.publishedRecords.map(recordKey));
+      const support = manifest.semanticItems.flatMap((item) => item.support)
+        .concat(manifest.acceptedClaims ?? [])
+        .concat((manifest.retainedPositions ?? []).flatMap((position) => position.records))
+        .concat((manifest.attribution ?? []).map((item) => item.evidence));
+      const publishedRevisions = new Set(
+        (manifest.publishedRevisionRefs ?? []).map((ref) => ref.id),
+      );
+      const required = [];
+      if (manifest.source.ontologyRevision) required.push(manifest.source.ontologyRevision.id);
+      if (manifest.commonBase) required.push(manifest.commonBase.id);
+      for (const dependency of manifest.dependencies ?? []) {
+        if (dependency.ontologyRevision) required.push(dependency.ontologyRevision.id);
+      }
+      const targetHead = manifest.target.ontologyRevision?.id ?? null;
+      return support.every((ref) => published.has(recordKey(ref)))
+        && required.every((ref) => publishedRevisions.has(ref))
+        && (revision.conditional.previousRevisionId ?? null) === targetHead;
+    });
+    check(`${fname}: ontology closure and predecessor`, closureOk);
+  }
   // v0.4: a binding that skipped `contradiction_case` as unknown still
   // VERIFIES the file; reporting the states proves it read them.
   if (exp.epistemicStates || exp.workflowStates) {

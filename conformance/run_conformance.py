@@ -112,6 +112,82 @@ def main() -> int:
                       if pr.get("evidenceId") is not None
                   ))
 
+        # v0.7: prove the binding surfaced the immutable ontology envelope,
+        # not merely skipped a new kind while still verifying its bytes.
+        if "ontologyRevisionIds" in exp:
+            recs = [
+                r["data"] for r in AntReader(path.read_bytes())
+                if r["kind"] == "ontology_revision"
+            ]
+            fields = {
+                "ontologyRevisionIds": [r["id"] for r in recs],
+                "ontologyTargetVaults": [r["manifest"]["target"]["vaultId"] for r in recs],
+                "ontologyPreviousRevisionIds": [
+                    r["conditional"].get("previousRevisionId") for r in recs
+                ],
+                "ontologySemanticKinds": [
+                    [item["kind"] for item in r["manifest"]["semanticItems"]]
+                    for r in recs
+                ],
+                "ontologyConditionalDomains": [
+                    r["conditional"]["revisionDomain"] for r in recs
+                ],
+                "ontologyConditionalChains": [r["conditional"]["chainId"] for r in recs],
+                "ontologyPublisherPrincipals": [r["publisher"]["principal"] for r in recs],
+                "ontologyApprovalAttesters": [
+                    r["manifest"]["approval"]["attestation"]["attesterPrincipal"]
+                    for r in recs
+                ],
+                "ontologyRetainedDispositions": [
+                    [position["disposition"] for position in r["manifest"]["retainedPositions"]]
+                    for r in recs
+                ],
+                "ontologyAttributionPrincipals": [
+                    [item["principal"] for item in r["manifest"]["attribution"]]
+                    for r in recs
+                ],
+            }
+            for key, got in fields.items():
+                check(f"{fname}: {key}", got == exp[key], f"got {got}")
+
+            def _record_key(ref):
+                return (ref["kind"], ref["id"], ref["contentSha256"])
+
+            closure_ok = True
+            for revision in recs:
+                manifest = revision["manifest"]
+                published = {_record_key(ref) for ref in manifest["publishedRecords"]}
+                support = [
+                    ref for item in manifest["semanticItems"] for ref in item["support"]
+                ]
+                support += manifest.get("acceptedClaims", [])
+                support += [
+                    ref
+                    for position in manifest.get("retainedPositions", [])
+                    for ref in position["records"]
+                ]
+                support += [a["evidence"] for a in manifest.get("attribution", [])]
+                closure_ok &= all(_record_key(ref) in published for ref in support)
+                published_revisions = {
+                    ref["id"] for ref in manifest.get("publishedRevisionRefs", [])
+                }
+                required = []
+                if manifest["source"].get("ontologyRevision"):
+                    required.append(manifest["source"]["ontologyRevision"]["id"])
+                if manifest.get("commonBase"):
+                    required.append(manifest["commonBase"]["id"])
+                required += [
+                    pin["ontologyRevision"]["id"]
+                    for pin in manifest.get("dependencies", [])
+                    if pin.get("ontologyRevision")
+                ]
+                closure_ok &= all(ref in published_revisions for ref in required)
+                target_head = manifest["target"].get("ontologyRevision")
+                closure_ok &= revision["conditional"].get("previousRevisionId") == (
+                    target_head["id"] if target_head else None
+                )
+            check(f"{fname}: ontology closure and predecessor", closure_ok)
+
         # v0.4: a binding that skipped `contradiction_case` as unknown
         # still VERIFIES the file; reporting the states proves it read them.
         if "epistemicStates" in exp or "workflowStates" in exp:

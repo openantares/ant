@@ -7,6 +7,7 @@
       "edges": 1,
       "evidence": 1,
       "observations": 1,
+      "ontologyRevisions": 0,
       "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 1,
@@ -25,7 +26,7 @@
       "vector"
     ],
     "tenantId": 1,
-    "version": "0.6"
+    "version": "0.7"
   },
   "contradiction_cases.ant": {
     "counts": {
@@ -35,6 +36,7 @@
       "edges": 0,
       "evidence": 8,
       "observations": 4,
+      "ontologyRevisions": 0,
       "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 0,
@@ -71,7 +73,7 @@
       "contradiction_case"
     ],
     "tenantId": 1,
-    "version": "0.6",
+    "version": "0.7",
     "workflowStates": [
       "awaiting_review",
       "settled",
@@ -87,6 +89,7 @@
       "edges": 0,
       "evidence": 0,
       "observations": 0,
+      "ontologyRevisions": 0,
       "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 0,
@@ -101,7 +104,66 @@
       "hologram"
     ],
     "tenantId": 1,
-    "version": "0.6"
+    "version": "0.7"
+  },
+  "ontology_revisions.ant": {
+    "counts": {
+      "beliefs": 0,
+      "contradictionCases": 0,
+      "edgeTombstones": 0,
+      "edges": 0,
+      "evidence": 1,
+      "observations": 0,
+      "ontologyRevisions": 1,
+      "relationshipProposals": 0,
+      "schemaTypes": 0,
+      "vectors": 0,
+      "vertexTombstones": 0,
+      "vertices": 0
+    },
+    "ontologyApprovalAttesters": [
+      "machine:main-server"
+    ],
+    "ontologyAttributionPrincipals": [
+      [
+        "user:sme-a"
+      ]
+    ],
+    "ontologyConditionalChains": [
+      "ontology"
+    ],
+    "ontologyConditionalDomains": [
+      "ontology/v1"
+    ],
+    "ontologyPreviousRevisionIds": [
+      null
+    ],
+    "ontologyPublisherPrincipals": [
+      "machine:main-server"
+    ],
+    "ontologyRetainedDispositions": [
+      [
+        "accepted"
+      ]
+    ],
+    "ontologyRevisionIds": [
+      "orv1:a28688f1b8e4cc493841b7d41e679f2985facd9636667b3bed2deefbed9f5bd5"
+    ],
+    "ontologySemanticKinds": [
+      [
+        "schema_type"
+      ]
+    ],
+    "ontologyTargetVaults": [
+      "team:operations"
+    ],
+    "projectId": 7,
+    "recordKinds": [
+      "evidence",
+      "ontology_revision"
+    ],
+    "tenantId": 7,
+    "version": "0.7"
   },
   "relationship_proposals.ant": {
     "counts": {
@@ -111,6 +173,7 @@
       "edges": 0,
       "evidence": 5,
       "observations": 0,
+      "ontologyRevisions": 0,
       "relationshipProposals": 3,
       "schemaTypes": 0,
       "vectors": 0,
@@ -144,7 +207,7 @@
       "relationship_proposal"
     ],
     "tenantId": 1,
-    "version": "0.6"
+    "version": "0.7"
   },
   "tombstones.ant": {
     "counts": {
@@ -154,6 +217,7 @@
       "edges": 1,
       "evidence": 0,
       "observations": 0,
+      "ontologyRevisions": 0,
       "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 0,
@@ -169,7 +233,7 @@
       "edge_tombstone"
     ],
     "tenantId": 1,
-    "version": "0.6"
+    "version": "0.7"
   },
   "unknown_time.ant": {
     "counts": {
@@ -179,6 +243,7 @@
       "edges": 0,
       "evidence": 0,
       "observations": 2,
+      "ontologyRevisions": 0,
       "relationshipProposals": 0,
       "schemaTypes": 0,
       "vectors": 0,
@@ -202,6 +267,6 @@
     "unknownReasons": [
       "no_source_time"
     ],
-    "version": "0.6"
+    "version": "0.7"
   }
 }

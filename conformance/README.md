@@ -30,8 +30,13 @@ runner per implementation. Every implementation must:
    (`epistemicStates`, `workflowStates`),
 9. ignore trailer count keys it does not know — they count kinds it
    skipped — while defaulting later-version keys it does know to zero.
+10. read `ontology_revisions.ant` (v0.7), surface the native revision,
+    and report its semantic id, target vault, previous head, semantic
+    item kinds, and conditional domain/chain. The fixture also pins
+    exact record/revision closure and the immutable first-publisher
+    envelope.
 
-Format version: **0.6**. [`../SPEC.md`](../SPEC.md) is normative. The
+Format version: **0.7**. [`../SPEC.md`](../SPEC.md) is normative. The
 format changelog records what changed at each bump and the order to
 apply it in; the spec supersedes it where they differ.
 
@@ -75,6 +80,14 @@ by real corpus cases in a later release. See `../SPEC.md` §5.2 and
 [`deltas/ant-v0.4-delta.md`](../deltas/ant-v0.4-delta.md).
 
 The two runners in this repository, both of which you can run here:
+
+**v0.7 — elected ontology revisions.** The new `ontology_revision`
+kind preserves the complete reviewed semantic manifest and immutable
+election envelope. The conformance vector reports semantic identity,
+typed item kinds, target vault, prior ontology head, and the
+`ontology/v1` / `ontology` conditional position so an implementation
+cannot pass by skipping the kind. The trailer gains
+`ontologyRevisions`; older trailers default it to zero.
 
 | implementation | runner | negatives | schema check |
 |----------------|--------|-----------|--------------|

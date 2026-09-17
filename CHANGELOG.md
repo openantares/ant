@@ -7,6 +7,7 @@ they differ.
 
 | format | date | change | delta |
 |---|---|---|---|
+| 0.7 | 2026-09-17 | `ontology_revision` record kind: immutable elected semantic manifests with exact vault/head pins, typed definitions, explicit record and revision closure, retained positions and attribution, complete approval binding, first-publisher identity, idempotency identity, and the `ontology/v1` conditional head position; trailer key `ontologyRevisions` | [deltas/ant-v0.7-delta.md](deltas/ant-v0.7-delta.md) |
 | 0.5 | 2026-09-14 | `relationship_proposal` record kind: immutable revisions of what a reconnaissance run proposed about a source — the proposed join, the run and source manifest, the measurement (PRODUCT-192's evidence contract), the SQL probes, and the status, with a reviewer's receipt when promoted; native closure; trailer key `relationshipProposals` | [deltas/ant-v0.5-delta.md](deltas/ant-v0.5-delta.md) |
 | 0.4 | 2026-09-10 | `contradiction_case` record kind: immutable revisions comparing exact claim revisions, three state families, native closure; trailer key `contradictionCases`; readers ignore unknown count keys | [deltas/ant-v0.4-delta.md](deltas/ant-v0.4-delta.md) |
 | 0.3 | 2026-08 | typed property envelopes `{"$ant": ..., "v": ...}` for decimal, date, time, timestamp, uuid, bytes, sized ints and arrays; the six legacy shapes unchanged | [deltas/ant-v0.3-delta.md](deltas/ant-v0.3-delta.md) |

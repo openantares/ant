@@ -1,6 +1,6 @@
 // OpenAntares `.ant` reference binding for JavaScript (Node >= 22,
 // which ships native zstd in `node:zlib`). Reader + validator; spec:
-// ../../SPEC.md, format version 0.6.
+// ../../SPEC.md, format version 0.7.
 //
 //   import { AntReader, validate, decodeProperty } from "./openantares.mjs";
 //   const reader = new AntReader(fs.readFileSync("world.ant"));
@@ -15,7 +15,7 @@ import { zstdDecompressSync } from "node:zlib";
 
 // ---- generated from the Rust types by gen_schema: format facts ----
 export const FORMAT_MAJOR = 0;
-export const FORMAT_MINOR = 6;
+export const FORMAT_MINOR = 7;
 export const FORMAT_VERSION = `${FORMAT_MAJOR}.${FORMAT_MINOR}`;
 // ---- end generated: format facts ----
 
@@ -83,6 +83,7 @@ const DATA_KINDS = new Set([
   "edge_tombstone",
   "contradiction_case",
   "relationship_proposal",
+  "ontology_revision",
 ]);
 
 const COUNT_KEYS = {
@@ -97,6 +98,7 @@ const COUNT_KEYS = {
   edge_tombstone: "edgeTombstones",
   contradiction_case: "contradictionCases",
   relationship_proposal: "relationshipProposals",
+  ontology_revision: "ontologyRevisions",
 };
 
 // Trailer keys added after the first version. Absent in an older
@@ -107,6 +109,7 @@ const LATER_COUNT_KEYS = [
   "edgeTombstones",
   "contradictionCases",
   "relationshipProposals",
+  "ontologyRevisions",
 ];
 // ---- end generated: kinds ----
 
@@ -140,6 +143,7 @@ function emptyCounts() {
     edgeTombstones: 0,
     contradictionCases: 0,
     relationshipProposals: 0,
+    ontologyRevisions: 0,
   };
 }
 // ---- end generated: counts ----

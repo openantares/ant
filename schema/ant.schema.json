@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openantares.org/schema/ant.schema.json",
-  "title": "OpenAntares .ant record (format 0.6)",
+  "title": "OpenAntares .ant record (format 0.7)",
   "description": "Schema for ONE decompressed NDJSON line of a .ant stream. The container-level rules (manifest first, trailer last, sha256 over preceding lines) live in SPEC.md and cannot be expressed per-line.",
   "type": "object",
   "required": [
@@ -43,6 +43,9 @@
     },
     {
       "$ref": "#/$defs/relationship_proposal"
+    },
+    {
+      "$ref": "#/$defs/ontology_revision"
     },
     {
       "$ref": "#/$defs/trailer"
@@ -637,6 +640,13 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "ontologyRevisions": {
+          "description": "`ontology_revision` records. Added in v0.7. Absent in an older trailer, where it means zero; an older reader ignores the key and skips the record kind while preserving stream integrity verification.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
         },
         "relationshipProposals": {
           "description": "`relationship_proposal` records. Added in v0.5. Absent in a trailer written before v0.5, where it means zero — readers MUST default it rather than reject the older file; an older reader ignores the key.",
@@ -1382,6 +1392,860 @@
         "kind": {
           "type": "string",
           "const": "observation"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_approval_attestation": {
+      "description": "Complete external approval asserted by the authenticated executor.",
+      "type": "object",
+      "required": [
+        "attestationVersion",
+        "attesterPrincipal",
+        "proposalId",
+        "electionSubjectSha256",
+        "sourceVault",
+        "sourceVaultRevision",
+        "targetVault",
+        "targetVaultRevision",
+        "authorityPolicyRevision",
+        "authorityPolicySha256",
+        "designation",
+        "matchedBy",
+        "sourceOwnerConsent",
+        "approval"
+      ],
+      "properties": {
+        "approval": {
+          "description": "Complete PRODUCT-208 Approval bytes. The engine validates required binding fields but does not replace the external authority service."
+        },
+        "attestationVersion": {
+          "description": "Attestation shape version.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "attesterPrincipal": {
+          "description": "Machine principal that must match the authenticated caller.",
+          "type": "string"
+        },
+        "authorityPolicyRevision": {
+          "description": "PRODUCT-43 authority-policy version revalidated before the effect.",
+          "type": "string"
+        },
+        "authorityPolicySha256": {
+          "description": "Canonical SHA-256 of that exact authority-policy document.",
+          "type": "string"
+        },
+        "designation": {
+          "description": "Why the human approver was designated for this proposal."
+        },
+        "electionSubjectSha256": {
+          "description": "Canonical digest of the material election subject.",
+          "type": "string"
+        },
+        "matchedBy": {
+          "description": "Exact grant/principal match selected by PRODUCT-43."
+        },
+        "proposalId": {
+          "description": "PRODUCT-208 proposal identity.",
+          "type": "string"
+        },
+        "sourceOwnerConsent": {
+          "description": "Separately bound authorization from the source-vault owner to publish this exact source/target/ref set.",
+          "$ref": "#/$defs/ontology_source_owner_consent"
+        },
+        "sourceVault": {
+          "description": "Reviewed source vault.",
+          "type": "string"
+        },
+        "sourceVaultRevision": {
+          "description": "Reviewed source vault revision.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "targetVault": {
+          "description": "Reviewed target vault.",
+          "type": "string"
+        },
+        "targetVaultRevision": {
+          "description": "Reviewed target vault revision.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_approval_binding": {
+      "description": "Digest plus complete authority attestation carried in the manifest.",
+      "type": "object",
+      "required": [
+        "contentSha256",
+        "attestation"
+      ],
+      "properties": {
+        "attestation": {
+          "description": "Complete attestation.",
+          "$ref": "#/$defs/ontology_approval_attestation"
+        },
+        "contentSha256": {
+          "description": "Canonical digest of [`Self::attestation`].",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_attribution": {
+      "description": "Contributor attribution retained through upward publication.",
+      "type": "object",
+      "required": [
+        "principal",
+        "evidence"
+      ],
+      "properties": {
+        "evidence": {
+          "description": "Native evidence written by that contributor.",
+          "$ref": "#/$defs/ontology_record_ref"
+        },
+        "principal": {
+          "description": "Engine-authenticated contributor principal.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_conditional_position": {
+      "description": "Conditional-chain position committed atomically with the revision.",
+      "type": "object",
+      "required": [
+        "revisionDomain",
+        "chainId",
+        "revisionId",
+        "initializedFromExisting"
+      ],
+      "properties": {
+        "chainId": {
+          "description": "Chain name. Must equal [`ONTOLOGY_CHAIN_ID`].",
+          "type": "string"
+        },
+        "initializedFromExisting": {
+          "description": "Whether a guarded chain explicitly adopted pre-existing unguarded data.",
+          "type": "boolean"
+        },
+        "previousRevisionId": {
+          "description": "Previous target head, absent for genesis.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revisionDomain": {
+          "description": "Engine-assigned domain. Must equal [`ONTOLOGY_REVISION_DOMAIN`].",
+          "type": "string"
+        },
+        "revisionId": {
+          "description": "This committed revision.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_mapping_definition": {
+      "description": "Typed mapping adopted by an ontology revision.",
+      "type": "object",
+      "required": [
+        "sourceType",
+        "sourceField",
+        "predicate",
+        "targetType"
+      ],
+      "properties": {
+        "predicate": {
+          "description": "Predicate the mapping produces.",
+          "type": "string"
+        },
+        "sourceField": {
+          "description": "Field read from the source.",
+          "type": "string"
+        },
+        "sourceType": {
+          "description": "Qualified source type.",
+          "type": "string"
+        },
+        "targetType": {
+          "description": "Qualified target type or canonical scalar type.",
+          "type": "string"
+        },
+        "transform": {
+          "description": "Optional named, versioned transform.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_predicate_definition": {
+      "description": "Typed definition of a predicate exposed by the elected ontology.",
+      "type": "object",
+      "required": [
+        "subjectType",
+        "predicate",
+        "objectType"
+      ],
+      "properties": {
+        "objectType": {
+          "description": "Qualified object type or canonical scalar type.",
+          "type": "string"
+        },
+        "predicate": {
+          "description": "Predicate or relationship name.",
+          "type": "string"
+        },
+        "sourceField": {
+          "description": "Source field that supplies the value, when the definition is mapped.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subjectType": {
+          "description": "Qualified subject type.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_publisher_stamp": {
+      "description": "Authenticated publisher stamped by the engine on first commit.",
+      "type": "object",
+      "required": [
+        "principal",
+        "tokenId",
+        "subjectType"
+      ],
+      "properties": {
+        "principal": {
+          "description": "Resolved machine principal.",
+          "type": "string"
+        },
+        "subjectType": {
+          "description": "Stable credential subject type (`service`).",
+          "type": "string"
+        },
+        "tokenId": {
+          "description": "Engine-native token used for the first commit.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_record_ref": {
+      "description": "One exact native record and its canonical content digest.",
+      "type": "object",
+      "required": [
+        "kind",
+        "id",
+        "contentSha256"
+      ],
+      "properties": {
+        "contentSha256": {
+          "description": "SHA-256 in [`ONTOLOGY_CANONICAL_ENCODING`].",
+          "type": "string"
+        },
+        "id": {
+          "description": "Record identity within the project.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Native plane containing the record.",
+          "oneOf": [
+            {
+              "description": "Graph vertex.",
+              "type": "string",
+              "const": "vertex"
+            },
+            {
+              "description": "Graph edge.",
+              "type": "string",
+              "const": "edge"
+            },
+            {
+              "description": "Source-bound observation.",
+              "type": "string",
+              "const": "observation"
+            },
+            {
+              "description": "Source evidence.",
+              "type": "string",
+              "const": "evidence"
+            },
+            {
+              "description": "Inferred belief version.",
+              "type": "string",
+              "const": "belief"
+            },
+            {
+              "description": "Contradiction-case revision.",
+              "type": "string",
+              "const": "contradiction_case"
+            },
+            {
+              "description": "Relationship-proposal revision.",
+              "type": "string",
+              "const": "relationship_proposal"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_retained_position": {
+      "description": "Reviewed positions retained by an election.",
+      "type": "object",
+      "required": [
+        "disposition",
+        "records"
+      ],
+      "properties": {
+        "disposition": {
+          "description": "How the election treated these records.",
+          "oneOf": [
+            {
+              "description": "Adopted position.",
+              "type": "string",
+              "const": "accepted"
+            },
+            {
+              "description": "Still viable but not elected.",
+              "type": "string",
+              "const": "competing"
+            },
+            {
+              "description": "Reviewed and rejected without deleting its evidence.",
+              "type": "string",
+              "const": "rejected"
+            }
+          ]
+        },
+        "records": {
+          "description": "Exact native records retaining the position.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ontology_record_ref"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_revision": {
+      "description": "One immutable elected ontology revision (v0.7). The envelope contains every byte required to rebuild its idempotency indexes and validated conditional head without inventing authority during hydration.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "One immutable elected ontology revision envelope.",
+          "type": "object",
+          "required": [
+            "id",
+            "tenantId",
+            "projectId",
+            "manifestSha256",
+            "manifest",
+            "publisher",
+            "requestId",
+            "requestSha256",
+            "committedAt",
+            "conditional"
+          ],
+          "properties": {
+            "committedAt": {
+              "description": "Engine commit time for the first envelope.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "conditional": {
+              "description": "Atomic conditional-head position.",
+              "$ref": "#/$defs/ontology_conditional_position"
+            },
+            "id": {
+              "description": "Semantic identity (`orv1:<manifest digest>`).",
+              "type": "string"
+            },
+            "manifest": {
+              "description": "Exact reviewed manifest.",
+              "$ref": "#/$defs/ontology_revision_manifest"
+            },
+            "manifestSha256": {
+              "description": "Canonical manifest digest.",
+              "type": "string"
+            },
+            "projectId": {
+              "description": "Project containing the record.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "publisher": {
+              "description": "Resolved first publisher credential.",
+              "$ref": "#/$defs/ontology_publisher_stamp"
+            },
+            "requestId": {
+              "description": "First committed request key.",
+              "type": "string"
+            },
+            "requestSha256": {
+              "description": "Canonical digest of the first request.",
+              "type": "string"
+            },
+            "tenantId": {
+              "description": "Tenant containing the record.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "ontology_revision"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_revision_manifest": {
+      "description": "Exact reviewed semantic manifest.",
+      "type": "object",
+      "required": [
+        "contractVersion",
+        "electionSubjectSha256",
+        "source",
+        "target",
+        "semanticItems",
+        "approval"
+      ],
+      "properties": {
+        "acceptedClaims": {
+          "description": "Claims adopted by the election.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ontology_record_ref"
+          }
+        },
+        "approval": {
+          "description": "Complete reviewed authority attestation.",
+          "$ref": "#/$defs/ontology_approval_binding"
+        },
+        "attribution": {
+          "description": "Contributor attribution retained through publication.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ontology_attribution"
+          }
+        },
+        "commonBase": {
+          "description": "Immutable common ancestor. Absent only for genesis.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ontology_revision_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contractVersion": {
+          "description": "Manifest contract version. Version 1 is defined here.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "dependencies": {
+          "description": "Lower-level ontology dependencies and their exact vault positions.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ontology_vault_pin"
+          }
+        },
+        "electionSubjectSha256": {
+          "description": "Canonical digest of [`Self::election_subject`].",
+          "type": "string"
+        },
+        "publishedRecords": {
+          "description": "Native records explicitly disclosed to the target vault.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ontology_record_ref"
+          }
+        },
+        "publishedRevisionRefs": {
+          "description": "Ontology revisions explicitly disclosed to the target vault.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ontology_revision_ref"
+          }
+        },
+        "retainedPositions": {
+          "description": "Accepted, competing, and rejected positions retained after election.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ontology_retained_position"
+          }
+        },
+        "reverses": {
+          "description": "Current target head intentionally reversed by this revision.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "semanticItems": {
+          "description": "Typed semantic definitions elected by this revision.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ontology_semantic_item"
+          }
+        },
+        "source": {
+          "description": "Reviewed source vault position.",
+          "$ref": "#/$defs/ontology_vault_pin"
+        },
+        "target": {
+          "description": "Reviewed target vault position.",
+          "$ref": "#/$defs/ontology_vault_pin"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_revision_ref": {
+      "description": "One immutable ontology revision reference.",
+      "type": "object",
+      "required": [
+        "id",
+        "manifestSha256"
+      ],
+      "properties": {
+        "id": {
+          "description": "Revision identity (`orv1:<manifest digest>`).",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "description": "Canonical digest of the referenced manifest.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_rule_definition": {
+      "description": "Typed derived rule adopted by an ontology revision.",
+      "type": "object",
+      "required": [
+        "ruleId",
+        "subjectType",
+        "predicate",
+        "expression",
+        "language"
+      ],
+      "properties": {
+        "expression": {
+          "description": "Versioned rule expression. Unsupported languages are rejected by the reasoning consumer rather than treated as opaque success.",
+          "type": "string"
+        },
+        "language": {
+          "description": "Rule language and version, for example `kgdsl-expression/v1`.",
+          "type": "string"
+        },
+        "predicate": {
+          "description": "Predicate produced or constrained by the rule.",
+          "type": "string"
+        },
+        "ruleId": {
+          "description": "Stable rule name.",
+          "type": "string"
+        },
+        "subjectType": {
+          "description": "Qualified subject type produced or constrained by the rule.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_semantic_item": {
+      "description": "One typed semantic item in an elected manifest.",
+      "oneOf": [
+        {
+          "description": "A complete schema type declaration.",
+          "type": "object",
+          "required": [
+            "kind",
+            "key",
+            "revision",
+            "content",
+            "contentSha256"
+          ],
+          "properties": {
+            "content": {
+              "description": "Typed schema declaration.",
+              "$ref": "#/$defs/schema_type_payload"
+            },
+            "contentSha256": {
+              "description": "Canonical digest of `content`.",
+              "type": "string"
+            },
+            "key": {
+              "description": "Stable semantic key.",
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "schema_type"
+            },
+            "revision": {
+              "description": "Source/review revision naming these exact bytes.",
+              "type": "string"
+            },
+            "support": {
+              "description": "Native records supporting this item.",
+              "type": "array",
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ontology_record_ref"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "A predicate definition.",
+          "type": "object",
+          "required": [
+            "kind",
+            "key",
+            "revision",
+            "content",
+            "contentSha256"
+          ],
+          "properties": {
+            "content": {
+              "description": "Typed predicate declaration.",
+              "$ref": "#/$defs/ontology_predicate_definition"
+            },
+            "contentSha256": {
+              "description": "Canonical digest of `content`.",
+              "type": "string"
+            },
+            "key": {
+              "description": "Stable semantic key.",
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "predicate_definition"
+            },
+            "revision": {
+              "description": "Source/review revision naming these exact bytes.",
+              "type": "string"
+            },
+            "support": {
+              "description": "Native records supporting this item.",
+              "type": "array",
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ontology_record_ref"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "A field-to-predicate mapping.",
+          "type": "object",
+          "required": [
+            "kind",
+            "key",
+            "revision",
+            "content",
+            "contentSha256"
+          ],
+          "properties": {
+            "content": {
+              "description": "Typed mapping declaration.",
+              "$ref": "#/$defs/ontology_mapping_definition"
+            },
+            "contentSha256": {
+              "description": "Canonical digest of `content`.",
+              "type": "string"
+            },
+            "key": {
+              "description": "Stable semantic key.",
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "mapping_definition"
+            },
+            "revision": {
+              "description": "Source/review revision naming these exact bytes.",
+              "type": "string"
+            },
+            "support": {
+              "description": "Native records supporting this item.",
+              "type": "array",
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ontology_record_ref"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "A derived semantic rule.",
+          "type": "object",
+          "required": [
+            "kind",
+            "key",
+            "revision",
+            "content",
+            "contentSha256"
+          ],
+          "properties": {
+            "content": {
+              "description": "Typed rule declaration.",
+              "$ref": "#/$defs/ontology_rule_definition"
+            },
+            "contentSha256": {
+              "description": "Canonical digest of `content`.",
+              "type": "string"
+            },
+            "key": {
+              "description": "Stable semantic key.",
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "rule_definition"
+            },
+            "revision": {
+              "description": "Source/review revision naming these exact bytes.",
+              "type": "string"
+            },
+            "support": {
+              "description": "Native records supporting this item.",
+              "type": "array",
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ontology_record_ref"
+              }
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "ontology_source_owner_consent": {
+      "description": "Source-vault owner's explicit consent to publish one exact reviewed set. The trusted executor obtains this consent outside the engine and retains the complete source-authority evidence here. The engine rechecks every duplicated binding against the material election subject; service read membership alone is never treated as publication authority.",
+      "type": "object",
+      "required": [
+        "consentVersion",
+        "consentId",
+        "ownerPrincipal",
+        "electionSubjectSha256",
+        "source",
+        "target",
+        "publishedRecords",
+        "publishedRevisionRefs",
+        "consent"
+      ],
+      "properties": {
+        "consent": {
+          "description": "Complete externally evaluated source-owner consent bytes."
+        },
+        "consentId": {
+          "description": "Durable external consent identity.",
+          "type": "string"
+        },
+        "consentVersion": {
+          "description": "Consent shape version. Version 1 is defined here.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "electionSubjectSha256": {
+          "description": "Exact material election subject the owner released.",
+          "type": "string"
+        },
+        "ownerPrincipal": {
+          "description": "Source owner named by the trusted authority evaluation.",
+          "type": "string"
+        },
+        "publishedRecords": {
+          "description": "Exact native records the owner released to the target.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ontology_record_ref"
+          }
+        },
+        "publishedRevisionRefs": {
+          "description": "Exact ontology revisions the owner released to the target.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ontology_revision_ref"
+          }
+        },
+        "source": {
+          "description": "Reviewed source position.",
+          "$ref": "#/$defs/ontology_vault_pin"
+        },
+        "target": {
+          "description": "Reviewed target position.",
+          "$ref": "#/$defs/ontology_vault_pin"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ontology_vault_pin": {
+      "description": "A vault revision and its elected ontology head at review time.",
+      "type": "object",
+      "required": [
+        "vaultId",
+        "vaultRevision"
+      ],
+      "properties": {
+        "ontologyRevision": {
+          "description": "Elected head at that position. Absent only for a genesis chain.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ontology_revision_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "vaultId": {
+          "description": "Vault whose feed position is pinned.",
+          "type": "string"
+        },
+        "vaultRevision": {
+          "description": "Exact vault feed revision reviewed.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "additionalProperties": true
@@ -2242,81 +3106,85 @@
       ],
       "properties": {
         "data": {
-          "description": "One declared type: kind, qualified name, properties, relations. This is the payload of a `schema_type` record in a `.ant` file.",
-          "type": "object",
-          "required": [
-            "kind",
-            "name",
-            "properties",
-            "relations"
-          ],
-          "properties": {
-            "properties": {
-              "description": "Property declarations.",
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/property_def"
-              }
-            },
-            "kind": {
-              "description": "What kind of OpenSPG type this is.",
-              "oneOf": [
-                {
-                  "description": "Built-in scalar type (Text, Integer, Float...).",
-                  "type": "string",
-                  "const": "BASIC_TYPE"
-                },
-                {
-                  "description": "Reusable constrained value type (e.g. a phone number).",
-                  "type": "string",
-                  "const": "STANDARD_TYPE"
-                },
-                {
-                  "description": "Entity: a thing with identity and properties.",
-                  "type": "string",
-                  "const": "ENTITY_TYPE"
-                },
-                {
-                  "description": "Index type in the OpenSPG sense.",
-                  "type": "string",
-                  "const": "INDEX_TYPE"
-                },
-                {
-                  "description": "Concept: a taxonomy/category node.",
-                  "type": "string",
-                  "const": "CONCEPT_TYPE"
-                },
-                {
-                  "description": "Event: something that happened, usually with participants.",
-                  "type": "string",
-                  "const": "EVENT_TYPE"
-                }
-              ]
-            },
-            "name": {
-              "description": "Namespace-qualified name, e.g. `Antares.Deal`.",
-              "type": "string"
-            },
-            "name_zh": {
-              "description": "Chinese display name if provided by marklang.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "relations": {
-              "description": "Relation (edge type) declarations.",
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/relation_def"
-              }
-            }
-          },
-          "additionalProperties": true
+          "description": "The declaration.",
+          "$ref": "#/$defs/schema_type_payload"
         },
         "kind": {
           "type": "string",
           "const": "schema_type"
+        }
+      },
+      "additionalProperties": true
+    },
+    "schema_type_payload": {
+      "description": "One declared type: kind, qualified name, properties, relations. This is the payload of a `schema_type` record in a `.ant` file.",
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "properties",
+        "relations"
+      ],
+      "properties": {
+        "properties": {
+          "description": "Property declarations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/property_def"
+          }
+        },
+        "kind": {
+          "description": "What kind of OpenSPG type this is.",
+          "oneOf": [
+            {
+              "description": "Built-in scalar type (Text, Integer, Float...).",
+              "type": "string",
+              "const": "BASIC_TYPE"
+            },
+            {
+              "description": "Reusable constrained value type (e.g. a phone number).",
+              "type": "string",
+              "const": "STANDARD_TYPE"
+            },
+            {
+              "description": "Entity: a thing with identity and properties.",
+              "type": "string",
+              "const": "ENTITY_TYPE"
+            },
+            {
+              "description": "Index type in the OpenSPG sense.",
+              "type": "string",
+              "const": "INDEX_TYPE"
+            },
+            {
+              "description": "Concept: a taxonomy/category node.",
+              "type": "string",
+              "const": "CONCEPT_TYPE"
+            },
+            {
+              "description": "Event: something that happened, usually with participants.",
+              "type": "string",
+              "const": "EVENT_TYPE"
+            }
+          ]
+        },
+        "name": {
+          "description": "Namespace-qualified name, e.g. `Antares.Deal`.",
+          "type": "string"
+        },
+        "name_zh": {
+          "description": "Chinese display name if provided by marklang.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "relations": {
+          "description": "Relation (edge type) declarations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relation_def"
+          }
         }
       },
       "additionalProperties": true
@@ -2566,7 +3434,7 @@
       "additionalProperties": true
     },
     "unknown_kind": {
-      "description": "Forward compatibility: any object with a string `kind` outside the v0.6 vocabulary is valid at the container level and MUST be skipped by readers.",
+      "description": "Forward compatibility: any object with a string `kind` outside the v0.7 vocabulary is valid at the container level and MUST be skipped by readers.",
       "type": "object",
       "required": [
         "kind"
@@ -2588,6 +3456,7 @@
               "edge_tombstone",
               "contradiction_case",
               "relationship_proposal",
+              "ontology_revision",
               "trailer"
             ]
           }

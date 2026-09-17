@@ -1,7 +1,7 @@
 """OpenAntares `.ant` reference binding for Python.
 
 Reader, writer, and validator for the OpenAntares container format
-(spec: ../../SPEC.md, format version 0.6). Requires the `zstandard`
+(spec: ../../SPEC.md, format version 0.7). Requires the `zstandard`
 package; nothing else beyond the standard library.
 
     from openantares import AntReader, AntWriter, validate, decode_property
@@ -32,7 +32,7 @@ except ImportError as e:  # pragma: no cover
 
 # ---- generated from the Rust types by gen_schema: format facts ----
 FORMAT_MAJOR = 0
-FORMAT_MINOR = 6
+FORMAT_MINOR = 7
 FORMAT_VERSION = f"{FORMAT_MAJOR}.{FORMAT_MINOR}"
 
 DATA_KINDS = (
@@ -47,6 +47,7 @@ DATA_KINDS = (
     "edge_tombstone",
     "contradiction_case",
     "relationship_proposal",
+    "ontology_revision",
 )
 
 # trailer count key per kind (counts are camelCase per spec §5)
@@ -62,6 +63,7 @@ _COUNT_KEY = {
     "edge_tombstone": "edgeTombstones",
     "contradiction_case": "contradictionCases",
     "relationship_proposal": "relationshipProposals",
+    "ontology_revision": "ontologyRevisions",
 }
 
 # Trailer keys added after the first version. Absent in an older
@@ -71,6 +73,7 @@ _LATER_COUNT_KEYS = (
     "edgeTombstones",
     "contradictionCases",
     "relationshipProposals",
+    "ontologyRevisions",
 )
 # ---- end generated: format facts ----
 
@@ -171,6 +174,7 @@ class Counts:
     edgeTombstones: int = 0
     contradictionCases: int = 0
     relationshipProposals: int = 0
+    ontologyRevisions: int = 0
 
     def as_trailer_dict(self) -> dict:
         return {
@@ -185,6 +189,7 @@ class Counts:
             "edgeTombstones": self.edgeTombstones,
             "contradictionCases": self.contradictionCases,
             "relationshipProposals": self.relationshipProposals,
+            "ontologyRevisions": self.ontologyRevisions,
         }
 
     def bump(self, kind: str) -> None:
@@ -200,6 +205,7 @@ class Counts:
             "edge_tombstone": "edgeTombstones",
             "contradiction_case": "contradictionCases",
             "relationship_proposal": "relationshipProposals",
+            "ontology_revision": "ontologyRevisions",
         }[kind]
         setattr(self, attr, getattr(self, attr) + 1)
 # ---- end generated: counts ----

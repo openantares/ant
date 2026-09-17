@@ -1,6 +1,6 @@
-# OpenAntares `.ant` Format — Specification v0.6
+# OpenAntares `.ant` Format — Specification v0.7
 
-Status: normative for format version `0.6`. This document plus
+Status: normative for format version `0.7`. This document plus
 [`schema/ant.schema.json`](schema/ant.schema.json) are the source of
 truth for the container; every implementation (the Rust crate
 `antares-format`, the reference bindings under [`bindings/`](bindings/),
@@ -11,7 +11,8 @@ Change notes for the bumps that produced this version live in the
 format changelog and the per-version delta notes (v0.2: version policy,
 tombstones, trailer/manifest additions; v0.3: typed property values;
 v0.4: contradiction cases; v0.5: relationship proposals; v0.6:
-explicitly-unknown observation time). This spec supersedes them; where
+explicitly-unknown observation time; v0.7: elected ontology revisions).
+This spec supersedes them; where
 they differ, this document and the golden files win.
 
 ## 1. Purpose
@@ -19,7 +20,8 @@ they differ, this document and the golden files win.
 `.ant` is a self-contained, compressed, streamable container for
 exchanging a *selection* of an Antares world model: schema types,
 vertices, edges, observations, evidence (structured and unstructured
-data ride together), beliefs, vector documents, and deletions. Design
+data ride together), beliefs, vector documents, elected ontology
+revisions, and deletions. Design
 goals, in priority order:
 
 1. **Open** — plain JSON records inside a standard zstd stream; a
@@ -55,6 +57,7 @@ final line also ends with `\n`.
 {"kind":"edge_tombstone","data":{...}}
 {"kind":"contradiction_case","data":{...}}            v0.4
 {"kind":"relationship_proposal","data":{...}}         v0.5
+{"kind":"ontology_revision","data":{...}}             v0.7
 {"kind":"trailer","counts":{...},"sha256":"..."}      exactly one, LAST line
 ```
 
@@ -96,7 +99,7 @@ exactly that bug.
 |-------------|-----------------|----------|---------|
 | `kind`      | `"manifest"`    | yes      | |
 | `format`    | `"antares"`     | yes      | belt for the zstd-magic braces |
-| `version`   | string          | yes      | container layout `MAJOR.MINOR`; this spec is `"0.3"` |
+| `version`   | string          | yes      | container layout `MAJOR.MINOR`; this spec is `"0.7"` |
 | `tenantId`  | integer         | yes      | origin tenant |
 | `projectId` | integer         | yes      | origin project |
 | `selection` | any JSON        | no       | what was selected (whole scope, seed query, digest params). Recorded **verbatim, not interpreted** |
@@ -117,7 +120,8 @@ by design** and normative:
 
 - the record **envelope**, `manifest`, `trailer.counts`, the `vector`
   payload, **both tombstone payloads**, the `contradiction_case`
-  payload and the `relationship_proposal` payload use **camelCase**
+  payload, the `relationship_proposal` payload and the
+  `ontology_revision` payload use **camelCase**
   (`tenantId`, `schemaTypes`, `recordType`, `textPreview`, `deletedAt`,
   `caseId`, `previousRevisionId`, `proposalId`, `sourceNonNull`);
 - the `vertex`/`edge`/`observation`/`evidence`/`belief` payloads use
@@ -132,7 +136,7 @@ The JSON Schema in `schema/ant.schema.json` specifies the required
 fields per kind; **unknown fields inside `data` MUST be
 preserved-or-ignored, never an error** (additive evolution).
 
-Kinds defined as of v0.6:
+Kinds defined as of v0.7:
 
 | kind               | since | payload |
 |--------------------|-------|---------|
@@ -147,6 +151,7 @@ Kinds defined as of v0.6:
 | `edge_tombstone`   | 0.2   | a deleted edge: same shape |
 | `contradiction_case` | 0.4 | one immutable revision of a case comparing two or more exact claim revisions: references, comparator identity, three state families (§5.2) |
 | `relationship_proposal` | 0.5 | one immutable revision of a relationship a reconnaissance run proposed about a source: the proposed join, the run and source manifest, the measurement, the SQL probes, and the status — quarantined, supported, promoted by a reviewer, refuted (§5.3) |
+| `ontology_revision` | 0.7 | one immutable elected ontology envelope: exact reviewed manifest, semantic definitions, evidence and revision closure, approval binding, publisher stamp, idempotency identity, commit time, and conditional ontology-head position (§5.5) |
 
 ### 5.1 Deletions (v0.2)
 
@@ -378,6 +383,67 @@ times are bare strings exactly as before, and errors only on an
 observation that uses one of the two object forms — which is precisely
 the "the file is ahead of this reader" signal §3 describes.
 
+### 5.5 Elected ontology revisions (v0.7)
+
+`ontology_revision` carries one immutable election of reviewed semantic
+definitions. It is a native data record, not a reconstruction from
+current graph state. Its `data` payload contains:
+
+- `id`, exactly `orv1:` followed by `manifestSha256`;
+- `tenantId` and `projectId`, which MUST equal the enclosing manifest;
+- the exact typed `manifest` and its canonical `manifestSha256`;
+- the authenticated first `publisher` (`principal`, `tokenId`,
+  `subjectType`), first `requestId` and canonical `requestSha256`, and
+  first `committedAt` time;
+- `conditional`, the committed ontology-head position: domain
+  `ontology/v1`, chain `ontology`, this `revisionId`, and an optional
+  `previousRevisionId`. `initializedFromExisting` MUST be false.
+
+The manifest is contract version 1. It pins the reviewed source,
+target and dependency vault revisions and the ontology head at each
+position; names the immutable common base where the target already had
+a head; carries typed `semanticItems`; explicitly lists
+`publishedRecords` and `publishedRevisionRefs`; retains accepted claims,
+competing and rejected positions, and contributor attribution; and
+includes the complete external approval attestation and its digest.
+Semantic items are one of `schema_type`, `predicate_definition`,
+`mapping_definition`, or `rule_definition`. Each carries a stable key,
+source/review revision, typed content, canonical content digest, and at
+least one native support record.
+
+Every `contentSha256`, `electionSubjectSha256`, `manifestSha256`,
+approval digest, and request digest uses the declared
+`antares-canonical-json-v1` encoding: SHA-256 over the ASCII domain
+prefix `antares-canonical-json-v1`, one zero byte, and canonical UTF-8
+JSON bytes. This encoding is not RFC 8785 JCS. Integers remain integers,
+object keys sort by Unicode scalar value, arrays retain order, and no
+whitespace is emitted between tokens.
+
+**The first envelope is immutable.** Replaying the same revision may
+reproduce those bytes, but MUST NOT replace its publisher token, request
+identity, commit time, manifest, or conditional position. The same
+`requestId` with different request bytes, the same manifest under a
+second request id, or the same revision id with a different envelope is
+a hard integrity conflict. An importer MUST compare an existing
+revision byte-for-byte before treating it as already present.
+
+**Closure is explicit and ordered.** Every record named by a semantic
+item, accepted claim, retained position, or attribution MUST appear in
+`publishedRecords` with the same kind, id, and content digest. Every
+required source, common-base, or dependency revision MUST appear in
+`publishedRevisionRefs`. An archive MUST contain those native records
+and revisions, earlier in dependency order, unless the import contract
+explicitly resolves them from an already trusted destination store.
+Missing and digest-mismatched closure is an error; current records may
+not be substituted for the reviewed bytes.
+
+Import reconstructs the ontology head only in revision domain
+`ontology/v1` and chain `ontology`. It MUST reject a domain or chain
+mismatch, a fork (two successors of one head), a cycle, a missing
+predecessor, or a record whose declared predecessor disagrees with the
+reviewed target head. Importing an archive never grants publication
+authority and never elects a different head from current state.
+
 ## 6. Property values
 
 A property value is one of five bare JSON forms, or a tagged envelope.
@@ -457,7 +523,7 @@ timestamps by instant; serialize the offset as given.
 {"kind":"trailer","counts":{"schemaTypes":N,"vertices":N,"edges":N,
  "observations":N,"evidence":N,"beliefs":N,"vectors":N,
  "vertexTombstones":N,"edgeTombstones":N,"contradictionCases":N,
- "relationshipProposals":N},"sha256":"<hex>"}
+ "relationshipProposals":N,"ontologyRevisions":N},"sha256":"<hex>"}
 ```
 
 - `sha256` is the lowercase-hex SHA-256 over **every preceding
@@ -470,8 +536,8 @@ timestamps by instant; serialize the offset as given.
   to a kind; writers of future kinds bump the MINOR version if they
   need counted records).
 - `vertexTombstones` and `edgeTombstones` were added in v0.2,
-  `contradictionCases` in v0.4 and `relationshipProposals` in v0.5.
-  Each MUST default to zero when absent,
+  `contradictionCases` in v0.4, `relationshipProposals` in v0.5, and
+  `ontologyRevisions` in v0.7. Each MUST default to zero when absent,
   so an older trailer still validates. A reader MUST ignore count keys
   it does not know: they count kinds it skipped as unknown, and failing
   on them would make every additive kind a breaking change.
@@ -505,7 +571,9 @@ selection descriptor verbatim so the consumer knows what the file
 every `evidence_id` referenced by an exported observation/edge/belief
 should have its `evidence` record included in the same file. **Case
 closure is mandatory** (§5.2): a file containing a `contradiction_case`
-MUST contain every record it references.
+MUST contain every record it references. Relationship-proposal closure
+is mandatory under §5.3, and ontology-revision closure and dependency
+ordering are mandatory under §5.5.
 
 ## 10. Reference implementations
 

@@ -35,6 +35,22 @@ runner per implementation. Every implementation must:
     item kinds, and conditional domain/chain. The fixture also pins
     exact record/revision closure and the immutable first-publisher
     envelope.
+11. read `relationship_proposals.ant` (v0.5) and SURFACE every
+    `relationship_proposal` record, reporting each one's status and the
+    support it measured (`proposalStatuses`, `proposalMatched`,
+    `proposalNonNull`). The measurement is the point: the golden's
+    quarantined hypothesis matched 0 of 1914 rows, and a binding that
+    skips the kind as unknown still verifies the file while leaving a
+    grader nothing to read.
+12. read `unknown_time.ant` (v0.6) and report the DECODED state of each
+    observation's times, not just the record count. `observed_at` and
+    `extracted_at` are one of three disjoint shapes — a bare RFC3339
+    string (known, no basis), `{"known":{"at":…,"basis":…}}`, or
+    `{"unknown":{"reason":…}}` — and `expected.json` pins the observed
+    states, the extracted bases and the unknown reasons
+    (`observedTimeStates`, `extractedTimeBases`, `unknownReasons`). A
+    binding that cannot read the additive form misclassifies these, and
+    one that stands epoch, now or zero in for an unknown time is wrong.
 
 Format version: **0.7**. [`../SPEC.md`](../SPEC.md) is normative. The
 format changelog records what changed at each bump and the order to
@@ -80,6 +96,33 @@ by real corpus cases in a later release. See `../SPEC.md` §5.2 and
 [`deltas/ant-v0.4-delta.md`](../deltas/ant-v0.4-delta.md).
 
 The two runners in this repository, both of which you can run here:
+
+**v0.5 — relationship proposals.** A new record kind,
+`relationship_proposal`: one immutable revision of what the
+reconnaissance loop proposed, the support it measured (rows matched
+over rows non-null, with the sampling method and its parameters) and
+what was decided — `supported`, `quarantined_hypothesis` with its
+reason, or `promoted_by_reviewer` with its receipt. An archive holding
+a proposal must hold the findings, probe results and receipt it cites —
+a closure verifier refuses one that does not. The schema states the
+conditional rules (a `full_scan` carries no percent, seed or cap; a
+repeatable sample carries its seed; a capped prefix carries its cap; a
+quarantine carries its reason; a promotion carries its receipt), and
+the Python runner checks that each malformed shape is rejected. The
+trailer gains `relationshipProposals`. See `../SPEC.md` §5.3 and
+[`deltas/ant-v0.5-delta.md`](../deltas/ant-v0.5-delta.md).
+
+**v0.6 — explicitly unknown observation time.** One shape change and no
+new kind. An observation's `observed_at` (the event time) and
+`extracted_at` (the provenance time) were required bare RFC3339
+strings, so a genuinely dateless original could not be represented at
+all. Each is now one of three disjoint shapes: the bare string it always
+was (known, no basis), `{"known":{"at":…,"basis":…}}`, or
+`{"unknown":{"reason":…}}`. A dated record is byte-identical to its v0.5
+form, so an older reader still reads every dated observation. Unknown
+is not null and not a sentinel: no reader may substitute epoch, now or
+zero for it. The trailer is unchanged. See `../SPEC.md` §5.4 and
+[`deltas/ant-v0.6-delta.md`](../deltas/ant-v0.6-delta.md).
 
 **v0.7 — elected ontology revisions.** The new `ontology_revision`
 kind preserves the complete reviewed semantic manifest and immutable

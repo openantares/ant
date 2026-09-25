@@ -5,6 +5,7 @@
 //
 //   node run_conformance.mjs
 
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -12,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const { AntError, AntReader, validate } = await import(
+const { AntError, AntReader, JSON_SOURCE_TEXT, canonicalJsonSize, trailerCounts, validate } = await import(
   join(HERE, "..", "bindings", "js", "openantares.mjs")
 );
 
@@ -38,7 +39,25 @@ function expectError(name, fn, needle) {
   check(name, false, "no error raised");
 }
 
-const expected = JSON.parse(readFileSync(join(GOLDEN, "expected.json"), "utf-8"));
+const sortedKeys = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+
+// Integers past 2^53 (a u64 slot, a coverage fact) are read exactly, as
+// the binding does.
+const expected = JSON.parse(readFileSync(join(GOLDEN, "expected.json"), "utf-8"), (k, v, c) =>
+  typeof v === "number" && !Number.isSafeInteger(v) && /^-?[0-9]+$/.test(c?.source ?? "")
+    ? BigInt(c.source)
+    : v,
+);
+const exact = (_k, v) => (typeof v === "bigint" ? `${v}n` : v);
+
+// A derivative slot past 2^53 reads exactly only with JSON.parse source
+// text (Node >= 21). Every supported runtime (Node >= 22) has it; a runtime
+// without it must fail here by name, not by refusing a valid file.
+check(
+  `runtime: JSON.parse source-text access (Node ${process.versions.node})`,
+  JSON_SOURCE_TEXT,
+  "a full-range u64 derivative slot cannot be read exactly on this runtime",
+);
 
 console.log("== golden files ==");
 for (const [fname, exp] of Object.entries(expected)) {
@@ -49,10 +68,119 @@ for (const [fname, exp] of Object.entries(expected)) {
     `${fname}: scope`,
     s.manifest.tenantId === exp.tenantId && s.manifest.projectId === exp.projectId,
   );
+  const got = trailerCounts(s.counts);
   const countsMatch =
-    Object.keys(exp.counts).length === Object.keys(s.counts).length &&
-    Object.entries(exp.counts).every(([k, v]) => s.counts[k] === v);
-  check(`${fname}: counts`, countsMatch, JSON.stringify(s.counts));
+    Object.keys(exp.counts).length === Object.keys(got).length &&
+    Object.entries(exp.counts).every(([k, v]) => got[k] === v);
+  check(`${fname}: counts`, countsMatch, JSON.stringify(got));
+  // v1.0: stored originals. Reassembling each one from its chunks and
+  // reporting its length and digest proves the binding READ them (and
+  // not merely skipped a kind while verifying the trailer).
+  if (exp.originals) {
+    const originals = [];
+    let current = null;
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "evidence" && rec.data.source_blob) {
+        current = { evidenceId: rec.data.id, byteLength: 0, sha: createHash("sha256"), chunks: 0 };
+        originals.push(current);
+      } else if (rec.kind === "original_chunk") {
+        const raw = Buffer.from(rec.data.bytes, "base64");
+        current.byteLength += raw.length;
+        current.sha.update(raw);
+        current.chunks += 1;
+      }
+    }
+    const report = originals.map((o) => ({
+      evidenceId: o.evidenceId,
+      byteLength: o.byteLength,
+      sha256: o.sha.digest("hex"),
+      chunks: o.chunks,
+    }));
+    check(
+      `${fname}: originals reassembled`,
+      // expected.json is written with sorted keys; compare by value.
+      JSON.stringify(report.map(sortedKeys)) === JSON.stringify(exp.originals.map(sortedKeys)),
+      JSON.stringify(report),
+    );
+  }
+  if (exp.sourceReferenceIds) {
+    const got = [];
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "original_source") got.push(rec.data.referenceId);
+    }
+    check(
+      `${fname}: source references`,
+      JSON.stringify(got) === JSON.stringify(exp.sourceReferenceIds),
+      JSON.stringify(got),
+    );
+  }
+  if (exp.derivatives) {
+    // Cleaned-text derivatives the binding READ as such.
+    const got = [];
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      const d = rec.kind === "evidence" ? rec.data.derivation : undefined;
+      if (d) {
+        got.push({
+          evidenceId: rec.data.id,
+          primaryEvidenceId: d.primaryEvidenceId,
+          jobId: d.jobId,
+          index: d.segment.index,
+        });
+      }
+    }
+    check(
+      `${fname}: derivatives`,
+      JSON.stringify(got.map(sortedKeys), exact) ===
+        JSON.stringify(exp.derivatives.map(sortedKeys), exact),
+      JSON.stringify(got, exact),
+    );
+  }
+  if (exp.sourceBytes || exp.source) {
+    // A reference's source is opaque too: returned exactly, counted as the
+    // Rust reader serializes it.
+    const srcs = [];
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "original_source") srcs.push(rec.data.source);
+    }
+    if (exp.sourceBytes) {
+      const got = srcs.map((x) => canonicalJsonSize(x));
+      check(
+        `${fname}: source bytes as Rust counts them`,
+        JSON.stringify(got) === JSON.stringify(exp.sourceBytes),
+        JSON.stringify(got),
+      );
+    }
+    if (exp.source) {
+      check(
+        `${fname}: source returned exactly`,
+        JSON.stringify(sortedKeys(srcs[0]), exact) === JSON.stringify(sortedKeys(exp.source), exact),
+        JSON.stringify(srcs[0], exact),
+      );
+    }
+  }
+  if (exp.coverageBytes || exp.coverage) {
+    // Coverage is opaque and returned exactly; its size is counted as the
+    // Rust reader serializes it (Rust wrote coverageBytes).
+    const covs = [];
+    for (const rec of new AntReader(readFileSync(join(GOLDEN, fname)))) {
+      if (rec.kind === "evidence" && rec.data.derivation) covs.push(rec.data.derivation.segment.coverage);
+    }
+    if (exp.coverageBytes) {
+      const got = covs.map((c) => canonicalJsonSize(c));
+      check(
+        `${fname}: coverage bytes as Rust counts them`,
+        JSON.stringify(got) === JSON.stringify(exp.coverageBytes),
+        JSON.stringify(got),
+      );
+    }
+    if (exp.coverage) {
+      check(
+        `${fname}: coverage returned exactly`,
+        JSON.stringify(sortedKeys(covs[0]), exact) === JSON.stringify(sortedKeys(exp.coverage), exact),
+        JSON.stringify(covs[0], exact),
+      );
+    }
+  }
   check(
     `${fname}: record kinds`,
     JSON.stringify(s.recordKinds) === JSON.stringify(exp.recordKinds),
@@ -295,7 +423,9 @@ console.log("== negative goldens (must be REJECTED) ==");
 const negatives = JSON.parse(readFileSync(join(GOLDEN, "expected_negatives.json"), "utf-8"));
 for (const [fname, spec] of Object.entries(negatives)) {
   if (!spec.mustReject) throw new Error(`${fname}: only mustReject negatives are supported`);
-  expectError(`${fname}: rejected`, () => validate(join(GOLDEN, fname)), "");
+  // `refusedFor` pins the reason where every reader states the rule in
+  // the same words (the derivation rules).
+  expectError(`${fname}: rejected`, () => validate(join(GOLDEN, fname)), spec.refusedFor ?? "");
 }
 
 console.log("== forward compatibility: a newer MINOR is readable ==");

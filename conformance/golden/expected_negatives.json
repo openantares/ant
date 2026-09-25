@@ -1,6 +1,180 @@
 {
+  "derivative_asset_id.ant": {
+    "mustReject": true,
+    "refusedFor": "assetId/sha256 are malformed",
+    "why": "v1.0: a derivative of ev_original names an assetId shorter than 16 characters; the Rust Derivation rule refuses it."
+  },
+  "derivative_configuration.ant": {
+    "mustReject": true,
+    "refusedFor": "configurationSha256 must be 64 lowercase hex",
+    "why": "v1.0: a derivative of ev_original names a normalizer configurationSha256 that is not lowercase hex; the Rust Derivation rule refuses it."
+  },
+  "derivative_contract.ant": {
+    "mustReject": true,
+    "refusedFor": "derivation.contract must be",
+    "why": "v1.0: a derivative of ev_original names a contract other than antares.normalized-text/v1; the Rust Derivation rule refuses it."
+  },
+  "derivative_coverage_depth.ant": {
+    "mustReject": true,
+    "refusedFor": "coverage nests deeper than 64 levels",
+    "why": "v1.0: a derivative of ev_original carries coverage nesting 65 objects deep, one past the 64-level bound that keeps it readable inside every envelope; the Rust Derivation rule refuses it."
+  },
+  "derivative_coverage_floats_over.ant": {
+    "mustReject": true,
+    "refusedFor": "coverage exceeds",
+    "why": "v1.0: a derivative's coverage is 2500 copies of 1.0: 10 KiB as the Rust reader serializes it (1.0 is written 1.0), over the 8 KiB bound; a reader counting its own shorter spelling would accept it."
+  },
+  "derivative_coverage_non_finite.ant": {
+    "mustReject": true,
+    "refusedFor": "number out of range",
+    "why": "v1.0: a derivative's opaque coverage holds 1e999, which no double holds; the Rust reader refuses it (serde_json: number out of range) and no reader may turn it into an infinity."
+  },
+  "derivative_coverage_size.ant": {
+    "mustReject": true,
+    "refusedFor": "coverage exceeds",
+    "why": "v1.0: a derivative of ev_original carries coverage over 8 KiB serialized; the Rust Derivation rule refuses it."
+  },
+  "derivative_coverage_type.ant": {
+    "mustReject": true,
+    "refusedFor": "coverage must be a JSON object",
+    "why": "v1.0: a derivative of ev_original carries coverage that is not a JSON object; the Rust Derivation rule refuses it."
+  },
+  "derivative_index_negative_zero.ant": {
+    "mustReject": true,
+    "refusedFor": "malformed `evidence` record",
+    "why": "v1.0: a derivative's typed u64 segment.index is the literal -0, which the Rust reader decodes as a double, not a u64."
+  },
+  "derivative_job_id.ant": {
+    "mustReject": true,
+    "refusedFor": "jobId must be 1..=128 characters",
+    "why": "v1.0: a derivative of ev_original names a jobId outside [A-Za-z0-9_.:-]; the Rust Derivation rule refuses it."
+  },
+  "derivative_locator.ant": {
+    "mustReject": true,
+    "refusedFor": "segment.locator must be",
+    "why": "v1.0: a derivative of ev_original names a locator one byte over 2 KiB; the Rust Derivation rule refuses it."
+  },
+  "derivative_normalizer.ant": {
+    "mustReject": true,
+    "refusedFor": "normalizer.name/version must be",
+    "why": "v1.0: a derivative of ev_original names a normalizer outside [A-Za-z0-9_.:-]; the Rust Derivation rule refuses it."
+  },
+  "derivative_orphan.ant": {
+    "mustReject": true,
+    "why": "v1.0: a cleaned-text derivative of ev_original appears after unrelated records; a derivative follows its primary's original and source references."
+  },
+  "derivative_out_of_order.ant": {
+    "mustReject": true,
+    "why": "v1.0: ev_original's derivatives are not in strictly increasing (jobId, index) order."
+  },
+  "derivative_primary_control.ant": {
+    "mustReject": true,
+    "refusedFor": "primaryEvidenceId must be non-empty with no control characters",
+    "why": "v1.0: a derivative of ev_original names a primaryEvidenceId with a control character; the Rust Derivation rule refuses it."
+  },
+  "derivative_sha256.ant": {
+    "mustReject": true,
+    "refusedFor": "assetId/sha256 are malformed",
+    "why": "v1.0: a derivative of ev_original names a sha256 that is not lowercase hex; the Rust Derivation rule refuses it."
+  },
+  "derivative_text_mismatch.ant": {
+    "mustReject": true,
+    "why": "v1.0: a derivative's content is not the text its derivation names (textSha256/textByteLength)."
+  },
+  "derivative_text_sha256.ant": {
+    "mustReject": true,
+    "refusedFor": "textSha256 must be 64 lowercase hex",
+    "why": "v1.0: a derivative of ev_original names a textSha256 that is not lowercase hex; the Rust Derivation rule refuses it."
+  },
+  "derivative_unbound.ant": {
+    "mustReject": true,
+    "why": "v1.0: a derivative after ev_original names different bytes (another sha256); a derivation binds exactly the original it follows."
+  },
+  "derivative_with_original.ant": {
+    "mustReject": true,
+    "refusedFor": "carries both a derivation and an original",
+    "why": "v1.0: a derivative of ev_original also carries a sourceBlob; a derivative carries no original."
+  },
   "major_version.ant": {
     "mustReject": true,
-    "why": "declares format v1.0; a 0.x reader must refuse rather than misread, because a major bump means field meanings or the container framing changed. Valid in every other respect, so rejecting it for any other reason is the wrong pass."
+    "why": "declares format v2.0; a reader of 0.x and 1.x must refuse rather than misread, because a major bump means field meanings or the container framing changed. Valid in every other respect, so rejecting it for any other reason is the wrong pass."
+  },
+  "original_blob_asset_id.ant": {
+    "mustReject": true,
+    "refusedFor": "sourceBlob.assetId must be 16..=128 characters",
+    "why": "v1.0: ev_original's sourceBlob names an assetId shorter than 16 characters; the Rust rule refuses it."
+  },
+  "original_blob_file_name.ant": {
+    "mustReject": true,
+    "refusedFor": "sourceBlob.fileName must be 1..=1024 bytes with no control",
+    "why": "v1.0: ev_original's sourceBlob declares a fileName with a control character; the Rust rule refuses it."
+  },
+  "original_blob_media_type.ant": {
+    "mustReject": true,
+    "refusedFor": "sourceBlob.mediaType must be 1..=255 printable ASCII",
+    "why": "v1.0: ev_original's sourceBlob declares a mediaType that is not printable ASCII; the Rust rule refuses it."
+  },
+  "original_blob_sha256.ant": {
+    "mustReject": true,
+    "refusedFor": "sourceBlob.sha256 must be 64 lowercase hex",
+    "why": "v1.0: ev_original's sourceBlob names a sha256 that is not lowercase hex; the Rust rule refuses it."
+  },
+  "original_chunk_digest.ant": {
+    "mustReject": true,
+    "why": "v1.0: chunk 1 of ev_original does not match its own sha256."
+  },
+  "original_in_v0.ant": {
+    "mustReject": true,
+    "why": "declares v0.7 but carries a sourceBlob and original_chunk records, which only v1.0 may: a 0.x reader would drop them silently."
+  },
+  "original_interrupted.ant": {
+    "mustReject": true,
+    "why": "v1.0: another record appears between ev_original's chunks; an original's chunks follow its evidence with nothing in between."
+  },
+  "original_missing_chunk.ant": {
+    "mustReject": true,
+    "why": "v1.0: chunk 1 of ev_original is absent; its original cannot be whole."
+  },
+  "original_reordered.ant": {
+    "mustReject": true,
+    "why": "v1.0: chunks 1 and 2 of ev_original are swapped; chunks are contiguous and in order."
+  },
+  "original_source_unbound.ant": {
+    "mustReject": true,
+    "why": "v1.0: a source reference after ev_original names different bytes (another sha256); a reference binds to exactly the original it follows."
+  },
+  "original_whole_digest.ant": {
+    "mustReject": true,
+    "why": "v1.0: every chunk matches its own sha256, but together they are not the original ev_original's sourceBlob.sha256 declares."
+  },
+  "source_reference_asset_id.ant": {
+    "mustReject": true,
+    "refusedFor": "reference.assetId/sha256 are malformed",
+    "why": "v1.0: ev_original's first source reference names an assetId shorter than 16 characters; the Rust rule refuses it."
+  },
+  "source_reference_evidence_control.ant": {
+    "mustReject": true,
+    "refusedFor": "reference.evidenceId must be non-empty with no control",
+    "why": "v1.0: ev_original's first source reference names an evidenceId with a control character; the Rust rule refuses it."
+  },
+  "source_reference_id.ant": {
+    "mustReject": true,
+    "refusedFor": "reference.referenceId must be 1..=128 characters",
+    "why": "v1.0: ev_original's first source reference names a referenceId outside [A-Za-z0-9_.:-]; the Rust rule refuses it."
+  },
+  "source_reference_source_depth.ant": {
+    "mustReject": true,
+    "refusedFor": "reference.source nests deeper than 64 levels",
+    "why": "v1.0: ev_original's first source reference carries a source nesting 65 objects deep, one past the 64-level bound; the Rust rule refuses it."
+  },
+  "source_reference_source_size.ant": {
+    "mustReject": true,
+    "refusedFor": "reference.source exceeds",
+    "why": "v1.0: ev_original's first source reference carries a source over 16 KiB serialized; the Rust rule refuses it."
+  },
+  "source_reference_source_type.ant": {
+    "mustReject": true,
+    "refusedFor": "reference.source must be a JSON object",
+    "why": "v1.0: ev_original's first source reference carries a source that is not a JSON object; the Rust rule refuses it."
   }
 }

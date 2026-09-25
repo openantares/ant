@@ -13,8 +13,8 @@ runner per implementation. Every implementation must:
    kinds still VERIFIES the file, so it would look correct while
    dropping every deletion on the floor,
 5. reject the negative goldens listed in `golden/expected_negatives.json`
-   (`major_version.ant` declares v1.0 and is valid in every other
-   respect, so a 0.x reader must refuse it for the VERSION),
+   (`major_version.ant` declares v2.0 and is valid in every other
+   respect, so a reader of 0.x and 1.x must refuse it for the VERSION),
 6. read a file whose MINOR is ahead of the reader, and report that it
    saw a subset — this is the rule most often implemented as
    `version == "0.2"`, which passes every positive test while being
@@ -51,8 +51,29 @@ runner per implementation. Every implementation must:
     (`observedTimeStates`, `extractedTimeBases`, `unknownReasons`). A
     binding that cannot read the additive form misclassifies these, and
     one that stands epoch, now or zero in for an unknown time is wrong.
+13. read `originals.ant` (v1.0) and reassemble each stored original from
+    its `original_chunk` records, reporting its evidence id, length,
+    SHA-256 and chunk count (`originals`) — including an EMPTY original,
+    which has no chunks and the empty digest — and list the ids of the
+    `original_source` records that follow it (`sourceReferenceIds`). A
+    binding that skips the kinds as unknown still verifies the file, and
+    would hand its caller evidence without the bytes or provenance it
+    names. Then list the cleaned-text derivatives that follow the
+    original (`derivatives`: evidence id, primary, job and slot), read as
+    typed derivations — a binding that flattens them to plain evidence
+    loses what they were cleaned from.
+14. reject every `original_*` and `derivative_*` negative in
+    `golden/expected_negatives.json`, each valid in every other respect: a
+    missing chunk, reordered chunks, a chunk that does not match its own
+    digest, chunks that are each sound but together are not the declared
+    original, a record between an evidence and its chunks, a v0.7 file
+    carrying originals, a source reference that does not bind to the
+    original it follows, a derivative that does not follow its primary's
+    original, one that binds other bytes, one whose content is not the
+    text it names, and derivatives out of (jobId, index) order.
 
-Format version: **0.7**. [`../SPEC.md`](../SPEC.md) is normative. The
+Format versions: **0.7**, and **1.0** for a file that carries stored
+originals. [`../SPEC.md`](../SPEC.md) is normative. The
 format changelog records what changed at each bump and the order to
 apply it in; the spec supersedes it where they differ.
 
@@ -132,10 +153,21 @@ typed item kinds, target vault, prior ontology head, and the
 cannot pass by skipping the kind. The trailer gains
 `ontologyRevisions`; older trailers default it to zero.
 
+**v1.0 — stored originals.** A MAJOR, because a 0.x reader would skip
+the new kind and field and import every evidence without its original;
+a different major is refused at the manifest instead. Only a file that
+carries an original is 1.0 — everything else is still written as 0.7,
+byte for byte. An evidence's `source_blob` names the original
+(`assetId`, `byteLength`, `sha256`, `mediaType`, `fileName`), and its
+bytes follow it at once as `original_chunk` records (SPEC §5.6,
+`../deltas/ant-v1.0-delta.md`). The golden pins one 150-byte original in
+three chunks, one empty original and one plain evidence; the trailer
+gains `originalChunks`, omitted when zero.
+
 | implementation | runner | negatives | schema check |
 |----------------|--------|-----------|--------------|
-| Python | `python3 run_conformance.py` | yes (7) | yes — `jsonschema` required; its absence is a failed check |
-| JavaScript | `node run_conformance.mjs` | yes (7) | covered by the Python runner |
+| Python | `python3 run_conformance.py` | yes: synthesized, plus every file in `expected_negatives.json` | yes — `jsonschema` required; its absence is a failed check |
+| JavaScript | `node run_conformance.mjs` | yes: synthesized, plus every file in `expected_negatives.json` | covered by the Python runner |
 
 The goldens themselves are written by `antares-format`, the canonical
 Rust implementation, which is upstream and not part of this repository.

@@ -1,6 +1,8 @@
-# OpenAntares `.ant` Format — Specification v0.7
+# OpenAntares `.ant` Format — Specification v0.7 / v1.0
 
-Status: normative for format version `0.7`. This document plus
+Status: normative for format versions `0.7` and `1.0`. `1.0` is `0.7`
+plus stored originals (§5.6), and is written ONLY for a selection that
+carries one; every other file is `0.7`, unchanged. This document plus
 [`schema/ant.schema.json`](schema/ant.schema.json) are the source of
 truth for the container; every implementation (the Rust crate
 `antares-format`, the reference bindings under [`bindings/`](bindings/),
@@ -11,7 +13,8 @@ Change notes for the bumps that produced this version live in the
 format changelog and the per-version delta notes (v0.2: version policy,
 tombstones, trailer/manifest additions; v0.3: typed property values;
 v0.4: contradiction cases; v0.5: relationship proposals; v0.6:
-explicitly-unknown observation time; v0.7: elected ontology revisions).
+explicitly-unknown observation time; v0.7: elected ontology revisions;
+v1.0: stored originals).
 This spec supersedes them; where
 they differ, this document and the golden files win.
 
@@ -58,15 +61,33 @@ final line also ends with `\n`.
 {"kind":"contradiction_case","data":{...}}            v0.4
 {"kind":"relationship_proposal","data":{...}}         v0.5
 {"kind":"ontology_revision","data":{...}}             v0.7
+{"kind":"original_chunk","data":{...}}                v1.0, right after its evidence
 {"kind":"trailer","counts":{...},"sha256":"..."}      exactly one, LAST line
 ```
 
 Every line is a JSON object with a string field `kind`. Data records
 (anything that is not `manifest`/`trailer`) may appear in any order and
-any multiplicity, including zero.
+any multiplicity, including zero — with one exception: an
+`original_chunk` belongs to the `evidence` record just before it, and
+all of that evidence's chunks follow it immediately (§5.6).
 
 File identification: the zstd magic **plus** a first record with
 `kind == "manifest"`, `format == "antares"`, and a supported `version`.
+
+A reader MAY bound how much it buffers per line. The Rust reader holds
+the manifest to a memory budget — for every version, since the manifest
+is read before the version is known:
+- The manifest line may not exceed the budget, and is read with its
+  buffer capped at it.
+- The line plus a one-pass upper bound on its decoded size must fit the
+  budget.
+
+Both are refused by name before the parser allocates. The default budget
+is 256 MiB; a reader that can afford more passes a larger one. The
+manifest grows with a vault map, so a very large vault-attributed scope
+can need more. The Rust reader also refuses, in a `1.x` file, a data line
+over 64 MiB (§5.6). `0.x` data lines are not bounded. None of these
+bounds an original: originals are chunk records of bounded size (§5.6).
 
 ## 3. Version compatibility
 
@@ -93,13 +114,22 @@ The failure this rule exists to prevent is a version gate written as
 and it locks out every future file for no reason. v0.1 shipped with
 exactly that bug.
 
+**Two majors are current: `0` and `1`.** A conforming reader of this
+spec reads both. Major `1` exists because of what a `0.x` reader does
+with an additive change: it skips unknown record kinds and ignores
+unknown fields. A stored original introduced as a minor would therefore
+be imported by every `0.x` reader as Evidence *without its original* —
+silently. A `1.0` file is refused by a `0.x` reader at the manifest,
+before any record. Writers use `1.0` only when the file carries an
+original; a file without one is `0.7`, byte for byte as before.
+
 ## 4. The manifest (first line)
 
 | field       | type            | required | meaning |
 |-------------|-----------------|----------|---------|
 | `kind`      | `"manifest"`    | yes      | |
 | `format`    | `"antares"`     | yes      | belt for the zstd-magic braces |
-| `version`   | string          | yes      | container layout `MAJOR.MINOR`; this spec is `"0.7"` |
+| `version`   | string          | yes      | container layout `MAJOR.MINOR`; this spec is `"0.7"`, or `"1.0"` for a file carrying stored originals (§5.6) |
 | `tenantId`  | integer         | yes      | origin tenant |
 | `projectId` | integer         | yes      | origin project |
 | `selection` | any JSON        | no       | what was selected (whole scope, seed query, digest params). Recorded **verbatim, not interpreted** |
@@ -136,7 +166,7 @@ The JSON Schema in `schema/ant.schema.json` specifies the required
 fields per kind; **unknown fields inside `data` MUST be
 preserved-or-ignored, never an error** (additive evolution).
 
-Kinds defined as of v0.7:
+Kinds defined as of v0.7 (and v1.0, which adds `original_chunk`):
 
 | kind               | since | payload |
 |--------------------|-------|---------|
@@ -152,6 +182,7 @@ Kinds defined as of v0.7:
 | `contradiction_case` | 0.4 | one immutable revision of a case comparing two or more exact claim revisions: references, comparator identity, three state families (§5.2) |
 | `relationship_proposal` | 0.5 | one immutable revision of a relationship a reconnaissance run proposed about a source: the proposed join, the run and source manifest, the measurement, the SQL probes, and the status — quarantined, supported, promoted by a reviewer, refuted (§5.3) |
 | `ontology_revision` | 0.7 | one immutable elected ontology envelope: exact reviewed manifest, semantic definitions, evidence and revision closure, approval binding, publisher stamp, idempotency identity, commit time, and conditional ontology-head position (§5.5) |
+| `original_chunk`   | 1.0   | one chunk of the stored original of the `evidence` record just before it: ids, index, offset, SHA-256 and base64 bytes (§5.6) |
 
 ### 5.1 Deletions (v0.2)
 
@@ -444,6 +475,168 @@ predecessor, or a record whose declared predecessor disagrees with the
 reviewed target head. Importing an archive never grants publication
 authority and never elects a different head from current state.
 
+### 5.6 Stored originals (v1.0)
+
+A primary evidence record may name the exact file it was cut from — a
+PDF, an Office document, a mail message — in an optional `source_blob`
+(the evidence payload is snake_case; the object inside is camelCase):
+
+```json
+"source_blob": {"assetId": "…", "byteLength": 150, "sha256": "<64 hex>",
+                "mediaType": "application/pdf", "fileName": "Q3.pdf"}
+```
+
+- `assetId` names the stored original, `[A-Za-z0-9_-]{16,128}`. It is an
+  identifier, never a credential.
+- `byteLength` is the exact length; `0` is an empty file.
+- `sha256` is the whole original's digest, lowercase hex.
+- `mediaType` (1..=255 printable ASCII) and `fileName` (1..=1024 bytes,
+  no control characters) are descriptive only.
+
+In a file, the evidence record is followed **immediately** by the
+original's bytes as `original_chunk` records, in order, before any other
+record:
+
+```json
+{"kind":"original_chunk","data":{"evidenceId":"…","assetId":"…","index":0,
+ "byteOffset":0,"sha256":"<chunk hex>","bytes":"<standard base64>"}}
+```
+
+A reader MUST reject the file unless, for every evidence with a
+`source_blob`:
+
+1. its chunks follow it with no other record in between;
+2. chunk `i` has `index == i`, `byteOffset` equal to the sum of the
+   preceding chunks' lengths, and the evidence's `id` and `assetId`;
+3. every chunk decodes (standard base64, padded) to at least one byte,
+   and the decoded bytes match the chunk's `sha256`;
+4. every chunk but the last has the length of the first, and the last is
+   no longer;
+5. the chunks total exactly `byteLength` and their concatenation matches
+   `sha256`. An empty original has no chunks, and its `sha256` is the
+   digest of zero bytes.
+
+A reader MUST also reject a `0.x` file that contains an evidence with a
+`source_blob` or any `original_chunk`. A reader MAY bound the length of a
+line it will buffer in a `1.x` file; the Rust reader refuses a data line
+over 64 MiB before buffering it. Chunk size is the writer's choice (the
+engine writes 1 MiB); it is a transfer unit, not a limit on an
+original's size.
+
+**Source references.** Where an original came from — a folder, a drive
+item, a mail message — is recorded as `original_source` records, all of
+which follow that original's last chunk (or its evidence, for an empty
+original), in strictly increasing `referenceId` order:
+
+```json
+{"kind":"original_source","data":{"evidenceId":"…","assetId":"…","sha256":"…",
+ "byteLength":150,"referenceId":"ref-drive-0001","source":{…},
+ "recordedAt":"2026-09-21T00:00:00Z"}}
+```
+
+`evidenceId`, `assetId`, `sha256` and `byteLength` MUST equal the
+evidence's `source_blob`; `referenceId` is `[A-Za-z0-9_.:-]{1,128}`;
+`source` is a JSON object of at most 16 KiB serialized, nesting at most
+64 levels (arrays and objects, `source` itself the first); `author` is
+optional. A reader MUST reject a reference that does not follow its
+original, does not bind to it, or repeats or goes back in order, and a
+`0.x` file that contains one. References are immutable: an importer
+MUST refuse one whose `referenceId` it already holds with a different
+`source`. A writer that exports an evidence with an original exports
+all of its references (the trailer counts them as `originalSources`,
+omitted when zero).
+
+An evidence's original is immutable: an importer MUST refuse to replace
+an existing evidence's original with a different one, or to overwrite
+an evidence that has an original with one that has none. Importers
+verify the whole file (every rule above and the trailer) before applying
+anything.
+
+**Cleaned-text derivatives.** Text normalized from a stored original is
+an ordinary, blob-free `evidence` record (its `content` is the text)
+carrying a typed `derivation` that binds it, immutably, to the exact
+original it came from:
+
+```json
+{"kind":"evidence","data":{"id":"ev_original_text_0", …, "content":"First cleaned block.",
+ "derivation":{"contract":"antares.normalized-text/v1","primaryEvidenceId":"ev_original",
+  "assetId":"…","sha256":"…","byteLength":150,
+  "normalizer":{"name":"html5ever-visible","version":"product-3-html-original-v1",
+                "configurationSha256":"…"},
+  "jobId":"normalization-…","segment":{"index":0,"locator":"html:line:1:block:0",
+  "coverage":{…}},"textSha256":"…","textByteLength":20}}}
+```
+
+- `contract` is `antares.normalized-text/v1`.
+- `primaryEvidenceId`, `assetId`, `sha256` and `byteLength` MUST equal the primary's
+  `source_blob`. A derivative has no `source_blob` of its own. `primaryEvidenceId` is
+  non-empty with no control characters (Unicode `Cc`), `assetId` is
+  `[A-Za-z0-9_-]{16,128}` and `sha256` is 64 lowercase hex characters.
+- `textSha256` and `textByteLength` MUST be the SHA-256 (64 lowercase hex characters)
+  and the UTF-8 byte length of `content`.
+- `normalizer.name` and `normalizer.version` are `[A-Za-z0-9_.:-]{1,64}`, and
+  `configurationSha256` is 64 lowercase hex characters. `jobId` is
+  `[A-Za-z0-9_.:-]{1,128}`.
+- `segment.index` is a stable 0-based slot, any unsigned 64-bit integer. Slots may be
+  sparse, and `(primaryEvidenceId, jobId, index)` names one derivative.
+- `segment.locator` is 1..=2048 bytes (UTF-8) with no control characters.
+- `segment.coverage` is a JSON object of at most 8 KiB serialized (canonical size,
+  below), nesting at most 64 levels (arrays and objects, `coverage` itself the first),
+  carried verbatim. It describes that segment only, never the whole job. The nesting
+  bound keeps a record readable inside every envelope that carries it: a JSON parser
+  such as serde_json refuses a document nested past 127 levels, and a sync feed frame
+  already puts `coverage` seven levels down.
+- `derivation`, `normalizer` and `segment` carry exactly these fields, no others.
+
+**Numbers and canonical size.** A reader MUST return every integer in
+[-2^63, 2^64-1] exactly, wherever it appears (a slot, a coverage fact, a source
+field); a reader whose native numbers are doubles uses an exact integer type past
+2^53 (the JavaScript binding returns a `BigInt` there, and a `number` otherwise). Every
+other number is the IEEE-754 double nearest its literal (correctly rounded); `-0` is the
+double -0.0; a literal no finite double can hold is refused.
+
+The "serialized" size bounding `segment.coverage` (8 KiB) and a source reference's
+`source` (16 KiB) is the byte length of the value's canonical compact JSON, the
+serialization the Rust reader produces:
+- no insignificant whitespace; object members and array elements in file order;
+- strings escaped as JSON requires (`"`, `\`, and U+0000..U+001F, the latter as
+  `\b \f \n \r \t` or `\u00xx`), every other character as UTF-8;
+- `true`, `false`, `null` as themselves;
+- an integer literal in [-2^63, 2^64-1] as its decimal digits;
+- `-0` and every other number as its double in shortest round-trip digits `D`
+  (length `n`, no trailing zeros) with decimal-point position `kk` (the value is
+  `0.D × 10^kk`), prefixed by `-` when negative, laid out as:
+  `0.0` for zero; `D` padded with zeros then `.0` when `kk - n >= 0` and `kk <= 16`;
+  `D` with a point after `kk` digits when `0 < kk <= 16`; `0.` then `-kk` zeros then
+  `D` when `-5 < kk <= 0`; otherwise `DeX` (one digit) or `D0.D1..eX` with
+  `X = kk - 1` written with its sign and no padding. So `1.0` is 3 bytes, `1e-6` is 4,
+  and `1e16` is `1e+16` (5).
+
+In a file, a derivative follows its primary: after the original's
+chunks and source references, or after another derivative of the same
+primary, in strictly increasing `(jobId, index)`. A reader MUST reject
+the following:
+- a derivation that breaks any rule above (sizes counted canonically);
+- a derivative that also carries a `source_blob`;
+- a derivative anywhere else;
+- one that does not bind to the original it follows;
+- one whose content is not the text it names;
+- derivatives out of order;
+- a derivative in a `0.x` file.
+
+A 0.x reader already refuses the file at its manifest, so no reader can
+read the text while dropping what it was cleaned from.
+
+A writer that exports a primary with an original exports every
+derivative of it that the export may show. A writer that exports a
+derivative exports its primary, the original's chunks and its source
+references. If the primary cannot be exported, the writer refuses. A
+derivative is immutable: an importer MUST refuse a record whose id, or
+whose `(primaryEvidenceId, jobId, index)` slot, it already holds with a
+different derivation or text, and one that would add, change or drop a
+`derivation` on an existing record. Derivatives count as `evidence` in
+the trailer.
+
 ## 6. Property values
 
 A property value is one of five bare JSON forms, or a tagged envelope.
@@ -526,6 +719,9 @@ timestamps by instant; serialize the offset as given.
  "relationshipProposals":N,"ontologyRevisions":N},"sha256":"<hex>"}
 ```
 
+A `1.0` trailer adds `"originalChunks":N`. Writers omit the key when it
+is zero, so a file without originals keeps the `0.7` trailer bytes.
+
 - `sha256` is the lowercase-hex SHA-256 over **every preceding
   uncompressed line including its trailing `\n`** — from the manifest
   line through the last data record line. The trailer line itself is
@@ -536,8 +732,9 @@ timestamps by instant; serialize the offset as given.
   to a kind; writers of future kinds bump the MINOR version if they
   need counted records).
 - `vertexTombstones` and `edgeTombstones` were added in v0.2,
-  `contradictionCases` in v0.4, `relationshipProposals` in v0.5, and
-  `ontologyRevisions` in v0.7. Each MUST default to zero when absent,
+  `contradictionCases` in v0.4, `relationshipProposals` in v0.5,
+  `ontologyRevisions` in v0.7, and `originalChunks` in v1.0. Each MUST
+  default to zero when absent,
   so an older trailer still validates. A reader MUST ignore count keys
   it does not know: they count kinds it skipped as unknown, and failing
   on them would make every additive kind a breaking change.
@@ -573,7 +770,10 @@ should have its `evidence` record included in the same file. **Case
 closure is mandatory** (§5.2): a file containing a `contradiction_case`
 MUST contain every record it references. Relationship-proposal closure
 is mandatory under §5.3, and ontology-revision closure and dependency
-ordering are mandatory under §5.5.
+ordering are mandatory under §5.5. **Original closure is mandatory**
+(§5.6): an evidence with a `source_blob` is exported with its complete
+original or not at all — a writer that cannot read an original refuses
+the export rather than write the evidence without it.
 
 ## 10. Reference implementations
 

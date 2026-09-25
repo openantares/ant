@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openantares.org/schema/ant.schema.json",
-  "title": "OpenAntares .ant record (format 0.7)",
+  "title": "OpenAntares .ant record (formats 0.7 and 1.0)",
   "description": "Schema for ONE decompressed NDJSON line of a .ant stream. The container-level rules (manifest first, trailer last, sha256 over preceding lines) live in SPEC.md and cannot be expressed per-line.",
   "type": "object",
   "required": [
@@ -46,6 +46,12 @@
     },
     {
       "$ref": "#/$defs/ontology_revision"
+    },
+    {
+      "$ref": "#/$defs/original_chunk"
+    },
+    {
+      "$ref": "#/$defs/original_source"
     },
     {
       "$ref": "#/$defs/trailer"
@@ -648,6 +654,18 @@
           "minimum": 0,
           "default": 0
         },
+        "originalChunks": {
+          "description": "`original_chunk` records. v1.0 only; omitted when zero, so a file without originals has exactly the v0.7 trailer.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "originalSources": {
+          "description": "`original_source` records. v1.0 only; omitted when zero.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
         "relationshipProposals": {
           "description": "`relationship_proposal` records. Added in v0.5. Absent in a trailer written before v0.5, where it means zero — readers MUST default it rather than reject the older file; an older reader ignores the key.",
           "type": "integer",
@@ -682,6 +700,105 @@
         }
       },
       "additionalProperties": true
+    },
+    "derivation": {
+      "description": "A cleaned-text Evidence's typed, immutable binding to the stored original it was normalized from (format v1.0, contract [`NORMALIZED_TEXT_CONTRACT`]). Carried only by a derivative: ordinary blob-free Evidence whose `content` is the cleaned text. The binding (`primary_evidence_id`, `asset_id`, `sha256`, `byte_length`) must equal the primary's [`SourceBlob`]; `text_sha256`/`text_byte_length` must equal the digest and UTF-8 length of the record's `content`. The slot `(primary_evidence_id, job_id, segment.index)` holds exactly one derivative. Once written, a derivation is never changed or dropped.",
+      "type": "object",
+      "required": [
+        "contract",
+        "primaryEvidenceId",
+        "assetId",
+        "sha256",
+        "byteLength",
+        "normalizer",
+        "jobId",
+        "segment",
+        "textSha256",
+        "textByteLength"
+      ],
+      "properties": {
+        "assetId": {
+          "description": "That primary's `sourceBlob.assetId`, `[A-Za-z0-9_-]{16,128}`.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{16,128}$"
+        },
+        "byteLength": {
+          "description": "That primary's `sourceBlob.byteLength`.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "contract": {
+          "description": "Always [`NORMALIZED_TEXT_CONTRACT`].",
+          "type": "string",
+          "const": "antares.normalized-text/v1"
+        },
+        "jobId": {
+          "description": "The producer's job, `[A-Za-z0-9_.:-]{1,128}`.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "normalizer": {
+          "description": "The normalizer that produced this text.",
+          "$ref": "#/$defs/normalizer"
+        },
+        "primaryEvidenceId": {
+          "description": "The primary Evidence carrying the original: non-empty, with no control characters.",
+          "type": "string",
+          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$"
+        },
+        "segment": {
+          "description": "This derivative's slot, locator and coverage.",
+          "$ref": "#/$defs/derivation_segment"
+        },
+        "sha256": {
+          "description": "That primary's `sourceBlob.sha256`.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "textByteLength": {
+          "description": "UTF-8 byte length of the record's `content`.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "textSha256": {
+          "description": "SHA-256 of the record's `content` (its UTF-8 bytes).",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "derivation_segment": {
+      "description": "Where one derivative sits in its job: a stable 0-based slot (slots may be sparse while work is pending, partial or refused), the source locator it covers, and the producer's opaque per-segment coverage facts.",
+      "type": "object",
+      "required": [
+        "index",
+        "locator",
+        "coverage"
+      ],
+      "properties": {
+        "coverage": {
+          "description": "The producer's coverage facts for this segment: a JSON object of at most [`Derivation::COVERAGE_MAX_BYTES`] serialized, nesting at most [`Derivation::COVERAGE_MAX_DEPTH`] levels, carried verbatim and never interpreted by the engine. It says nothing about the whole job's readiness.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "index": {
+          "description": "Stable 0-based slot within the job. Not assumed dense, and not assumed to equal a parser-unit ordinal.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "locator": {
+          "description": "Where in the original this text came from, at most [`Derivation::LOCATOR_MAX_BYTES`] bytes (UTF-8), with no control characters. The schema bounds characters; readers bound the bytes.",
+          "type": "string",
+          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$",
+          "maxLength": 2048,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
     },
     "edge": {
       "description": "A graph edge.",
@@ -928,6 +1045,17 @@
               "description": "The literal text/data the evidence points at. Required.",
               "type": "string"
             },
+            "derivation": {
+              "description": "The typed binding of a cleaned-text derivative to the stored original it was normalized from (format v1.0). Absent on every other record, which keeps their bytes unchanged. Never present together with `source_blob`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/derivation"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "extracted_at": {
               "description": "Wall-clock time the extractor produced this record.",
               "type": [
@@ -963,6 +1091,17 @@
               "type": "integer",
               "format": "uint64",
               "minimum": 0
+            },
+            "source_blob": {
+              "description": "The stored original this Evidence was cut from, when it is the primary record of a file (format v1.0). Absent on every other record, which keeps their bytes unchanged. The original itself is never embedded here.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/source_blob"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "source_id": {
               "description": "Identifier of the source event/artifact (e.g. \"meeting_001\", \"email_001\"). Required.",
@@ -1269,6 +1408,33 @@
           "additionalProperties": false
         }
       ]
+    },
+    "normalizer": {
+      "description": "Which normalizer produced a derivative: stable parser identity, its version, and the digest of its configuration. A new version or configuration is a new job, never a rewrite.",
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "configurationSha256"
+      ],
+      "properties": {
+        "configurationSha256": {
+          "description": "SHA-256 of the normalizer configuration, 64 lowercase hex characters.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "name": {
+          "description": "Stable parser identity, `[A-Za-z0-9_.:-]{1,64}`.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+        },
+        "version": {
+          "description": "Parser version, `[A-Za-z0-9_.:-]{1,64}`.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+        }
+      },
+      "additionalProperties": false
     },
     "observation": {
       "description": "An observation.",
@@ -2250,6 +2416,143 @@
       },
       "additionalProperties": true
     },
+    "original_chunk": {
+      "description": "One chunk of an Evidence's stored original (v1.0), right after that Evidence. See [`OriginalChunk`].",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "One chunk of a stored original (v1.0). Every chunk of an Evidence's original follows that Evidence record immediately, in order, before any other record; together they are exactly `sourceBlob.byteLength` bytes with digest `sourceBlob.sha256`. All chunks but the last have the length of the first; the last is no longer. [`AntReader`] enforces every one of those rules as it reads, so a reader that returns without error has verified each original it passed through.",
+          "type": "object",
+          "required": [
+            "evidenceId",
+            "assetId",
+            "index",
+            "byteOffset",
+            "sha256",
+            "bytes"
+          ],
+          "properties": {
+            "assetId": {
+              "description": "That Evidence's `sourceBlob.assetId`.",
+              "type": "string"
+            },
+            "byteOffset": {
+              "description": "Offset of the chunk's first byte in the original.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "bytes": {
+              "description": "The chunk's bytes, standard base64 with padding.",
+              "type": "string"
+            },
+            "evidenceId": {
+              "description": "The Evidence record this chunk belongs to — the one just before it.",
+              "type": "string"
+            },
+            "index": {
+              "description": "Position in the original, from 0.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "sha256": {
+              "description": "SHA-256 of the decoded chunk, 64 lowercase hex.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "original_chunk"
+        }
+      },
+      "additionalProperties": true
+    },
+    "original_source": {
+      "description": "One source reference of an Evidence's stored original (v1.0): where the bytes came from. All of them follow that original's last chunk, in strictly increasing `referenceId` order, bound to exactly that Evidence's `sourceBlob`.",
+      "type": "object",
+      "required": [
+        "kind",
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "description": "Where an Evidence's stored original came from — a native folder or picker, a drive item, a mail message (format v1.0). Any number bind to one original; they are append-only and immutable, and appending one never changes the Evidence record itself. The binding (`evidence_id`, `asset_id`, `sha256`, `byte_length`) must equal that Evidence's [`SourceBlob`]: a reference names exact bytes.",
+          "type": "object",
+          "required": [
+            "evidenceId",
+            "assetId",
+            "sha256",
+            "byteLength",
+            "referenceId",
+            "source",
+            "recordedAt"
+          ],
+          "properties": {
+            "assetId": {
+              "description": "That Evidence's `sourceBlob.assetId`.",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            },
+            "author": {
+              "description": "Who first recorded it.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/author_stamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "byteLength": {
+              "description": "That Evidence's `sourceBlob.byteLength`.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "evidenceId": {
+              "description": "The primary Evidence whose original this describes: non-empty, with no control characters.",
+              "type": "string",
+              "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$"
+            },
+            "recordedAt": {
+              "description": "When the reference was first recorded.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "referenceId": {
+              "description": "Client-chosen, deterministic for one source observation, so a retry converges: `[A-Za-z0-9_.:-]{1,128}`.",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+            },
+            "sha256": {
+              "description": "That Evidence's `sourceBlob.sha256`.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source": {
+              "description": "Where the bytes came from: a JSON object of at most [`SourceReference::SOURCE_MAX_BYTES`] serialized, nesting at most [`SourceReference::SOURCE_MAX_DEPTH`] levels, opaque to the engine.",
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "kind": {
+          "type": "string",
+          "const": "original_source"
+        }
+      },
+      "additionalProperties": true
+    },
     "probe_ref": {
       "description": "One SQL probe the loop ran to measure a proposal, kept so the measurement can be re-derived rather than believed. `statement` is the statement AS EXECUTED, parameterized — never with customer values inlined. `evidenceId`, when present, MUST resolve inside the file.",
       "type": "object",
@@ -3189,6 +3492,48 @@
       },
       "additionalProperties": true
     },
+    "source_blob": {
+      "description": "The exact original a primary Evidence was cut from, stored outside the record (format v1.0). The record carries this small reference; the bytes live in the engine's original store and travel beside the record wherever it goes (the feed carries only the reference and each node transfers the bytes before applying it; a blob-bearing `.ant` file carries them as `original_chunk` records right after the Evidence). `asset_id` names the stored original on every node and is never an authorization capability: reading it is authorized by the Evidence's own visibility. An Evidence's original is immutable — a changed file is a new Evidence id.",
+      "type": "object",
+      "required": [
+        "assetId",
+        "byteLength",
+        "sha256",
+        "mediaType",
+        "fileName"
+      ],
+      "properties": {
+        "assetId": {
+          "description": "Opaque identity of the stored original, `[A-Za-z0-9_-]{16,128}`.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{16,128}$"
+        },
+        "byteLength": {
+          "description": "Exact length of the original, in bytes. Zero is an empty file.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fileName": {
+          "description": "Display name of the original, 1..=1024 bytes with no control characters. Never used as a filesystem path. The schema bounds characters; readers bound the bytes.",
+          "type": "string",
+          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$",
+          "maxLength": 1024,
+          "minLength": 1
+        },
+        "mediaType": {
+          "description": "Media type declared for the original: informational, never used to serve it. 1..=255 printable ASCII bytes.",
+          "type": "string",
+          "pattern": "^[\\x20-\\x7E]{1,255}$"
+        },
+        "sha256": {
+          "description": "SHA-256 of the original bytes, 64 lowercase hex characters.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": true
+    },
     "source_dependency": {
       "description": "How a piece of material relates to the sources already in play. A forwarded copy of a source is NOT an independent witness to it; counting it as one is how two sources become \"confirmed by three\".",
       "oneOf": [
@@ -3434,7 +3779,7 @@
       "additionalProperties": true
     },
     "unknown_kind": {
-      "description": "Forward compatibility: any object with a string `kind` outside the v0.7 vocabulary is valid at the container level and MUST be skipped by readers.",
+      "description": "Forward compatibility: any object with a string `kind` outside the v0.7 / v1.0 vocabulary is valid at the container level and MUST be skipped by readers.",
       "type": "object",
       "required": [
         "kind"
@@ -3457,6 +3802,8 @@
               "contradiction_case",
               "relationship_proposal",
               "ontology_revision",
+              "original_chunk",
+              "original_source",
               "trailer"
             ]
           }

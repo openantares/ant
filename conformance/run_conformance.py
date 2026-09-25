@@ -25,7 +25,7 @@ import zstandard
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "bindings" / "python"))
-from openantares import AntError, AntReader, AntWriter, validate  # noqa: E402
+from openantares import AntError, AntReader, AntWriter, canonical_json_size, validate  # noqa: E402
 
 GOLDEN = HERE / "golden"
 CHECKS: list[tuple[str, bool, str]] = []
@@ -41,6 +41,9 @@ def expect_error(name: str, fn, needle: str) -> None:
         fn()
     except AntError as e:
         check(name, needle in str(e), f"got: {e}")
+        return
+    except Exception as e:  # a reader refuses with AntError; anything else is a crash
+        check(name, False, f"wrong error type: {type(e).__name__}: {e}")
         return
     check(name, False, "no error raised")
 
@@ -69,6 +72,65 @@ def main() -> int:
         )
         check(f"{fname}: counts", s.counts.as_trailer_dict() == exp["counts"],
               f"got {s.counts.as_trailer_dict()}")
+        # v1.0: stored originals. Reassembling each one from its chunks and
+        # reporting its length and digest proves the binding READ them (and
+        # not merely skipped a kind while verifying the trailer).
+        if "originals" in exp:
+            import base64
+            import hashlib
+
+            originals = []
+            for r in AntReader(path.read_bytes()):
+                if r["kind"] == "evidence" and r["data"].get("source_blob"):
+                    originals.append({"evidenceId": r["data"]["id"], "raw": hashlib.sha256(),
+                                      "byteLength": 0, "chunks": 0})
+                elif r["kind"] == "original_chunk":
+                    raw = base64.b64decode(r["data"]["bytes"])
+                    originals[-1]["raw"].update(raw)
+                    originals[-1]["byteLength"] += len(raw)
+                    originals[-1]["chunks"] += 1
+            got = [{"evidenceId": o["evidenceId"], "byteLength": o["byteLength"],
+                    "sha256": o["raw"].hexdigest(), "chunks": o["chunks"]} for o in originals]
+            check(f"{fname}: originals reassembled", got == exp["originals"], f"got {got}")
+        if "sourceReferenceIds" in exp:
+            got = [r["data"]["referenceId"] for r in AntReader(path.read_bytes())
+                   if r["kind"] == "original_source"]
+            check(f"{fname}: source references", got == exp["sourceReferenceIds"], f"got {got}")
+        if "derivatives" in exp:
+            # Cleaned-text derivatives the binding READ as such (typed
+            # derivation kept, not flattened to plain evidence).
+            got = [{"evidenceId": r["data"]["id"],
+                    "primaryEvidenceId": r["data"]["derivation"]["primaryEvidenceId"],
+                    "jobId": r["data"]["derivation"]["jobId"],
+                    "index": r["data"]["derivation"]["segment"]["index"]}
+                   for r in AntReader(path.read_bytes())
+                   if r["kind"] == "evidence" and r["data"].get("derivation") is not None]
+            check(f"{fname}: derivatives", got == exp["derivatives"], f"got {got}")
+        if "sourceBytes" in exp or "source" in exp:
+            # A reference's source is opaque too: returned exactly, counted
+            # as the Rust reader serializes it.
+            srcs = [r["data"]["source"] for r in AntReader(path.read_bytes())
+                    if r["kind"] == "original_source"]
+            if "sourceBytes" in exp:
+                got = [canonical_json_size(x) for x in srcs]
+                check(f"{fname}: source bytes as Rust counts them",
+                      got == exp["sourceBytes"], f"got {got}")
+            if "source" in exp:
+                check(f"{fname}: source returned exactly", srcs[0] == exp["source"],
+                      f"got {srcs[0]}")
+        if "coverageBytes" in exp or "coverage" in exp:
+            # Coverage is opaque and returned exactly; its size is counted
+            # as the Rust reader serializes it (Rust wrote coverageBytes).
+            covs = [r["data"]["derivation"]["segment"]["coverage"]
+                    for r in AntReader(path.read_bytes())
+                    if r["kind"] == "evidence" and r["data"].get("derivation") is not None]
+            if "coverageBytes" in exp:
+                got = [canonical_json_size(c) for c in covs]
+                check(f"{fname}: coverage bytes as Rust counts them",
+                      got == exp["coverageBytes"], f"got {got}")
+            if "coverage" in exp:
+                check(f"{fname}: coverage returned exactly", covs[0] == exp["coverage"],
+                      f"got {covs[0]}")
         check(f"{fname}: record kinds", s.record_kinds == exp["recordKinds"],
               f"got {s.record_kinds}")
         if "skippedKinds" in exp:
@@ -398,9 +460,11 @@ def main() -> int:
         for fname, spec in json.loads(negatives_path.read_text()).items():
             assert spec.get("mustReject"), f"{fname}: only mustReject negatives are supported"
             # Contract is "rejected", not a specific message: the error
-            # text differs per implementation, and pinning it would make
-            # the fixture untestable outside Rust.
-            expect_error(f"{fname}: rejected", lambda p=GOLDEN / fname: validate(str(p)), "")
+            # text differs per implementation. Where every reader states a
+            # rule in the same words (the derivation rules), `refusedFor`
+            # pins the reason, so a file refused for another rule fails.
+            expect_error(f"{fname}: rejected", lambda p=GOLDEN / fname: validate(str(p)),
+                         spec.get("refusedFor", ""))
 
     print("== forward compatibility: a newer MINOR is readable ==")
     # The policy that makes an additive minor bump safe: same major

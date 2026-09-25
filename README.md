@@ -7,7 +7,7 @@ cross-language conformance suite.
 ## Layout
 
 ```
-SPEC.md                       the normative format specification (v0.7)
+SPEC.md                       the normative format specification (v0.7, and v1.0 for stored originals)
 CHANGELOG.md                  what changed at each format bump, with a delta note each
 deltas/                       the per-bump delta notes (spec, schema, bindings)
 schema/ant.schema.json        JSON Schema for every record line (source of truth
@@ -51,8 +51,12 @@ so a diff in the golden bytes always means a deliberate format change.
 ## Versioning
 
 The container version lives in the manifest (`"version": "0.7"`) as
-`MAJOR.MINOR`. Readers accept any MINOR at the same MAJOR and report
-when a file is ahead of them; a different MAJOR is rejected. Unknown
+`MAJOR.MINOR`. A file that carries stored originals is `"1.0"`;
+everything else is still written as 0.7, byte for byte. Readers accept
+any MINOR at a MAJOR they implement and report when a file is ahead of
+them; any other MAJOR is rejected, so a 0.x reader refuses a 1.0 file
+rather than silently drop its originals. Two majors are current, 0 and
+1 (SPEC.md §3). Unknown
 record kinds and additive fields inside known kinds are
 forward-compatible by specification (see SPEC.md §3 and §8).
 
